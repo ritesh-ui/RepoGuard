@@ -60,8 +60,8 @@ graph TD
 
 1. **Clone the repo**:
    ```bash
-   git clone <repo_url>
-   cd ai_security_scanner
+   git clone https://github.com/ritesh-ui/RepoGuard.git
+   cd RepoGuard
    ```
 
 2. **Setup Virtual Environment**:
