@@ -118,8 +118,8 @@ RepoGuard isn't just a prototype; it's a battle-tested audit engine. We regularl
 
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
-| **HF SmolAgents** | 3 High Risks (Command Injection, Prompt Injection) | ✅ Audited | [View Report](file:///Users/riteshsingh/Desktop/Files/VSCode/ai_security_scanner/RESULTS_SMOLAGENTS.md) |
-| **OpenAI Agents SDK** | 5 High Risks (Command Injection, Hardcoded Secrets) | ✅ Audited | [View Report](file:///Users/riteshsingh/Desktop/Files/VSCode/ai_security_scanner/RESULTS_OPENAI_SDK.md) |
+| **HF SmolAgents** | 3 High Risks (Command Injection, Prompt Injection) | ✅ Audited | [View Report](./RESULTS_SMOLAGENTS.md) |
+| **OpenAI Agents SDK** | 5 High Risks (Command Injection, Hardcoded Secrets) | ✅ Audited | [View Report](./RESULTS_OPENAI_SDK.md) |
 | **Aider** | Scheduled | 📅 Pending | - |
 
 > [!TIP]
