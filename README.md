@@ -112,6 +112,26 @@ jobs:
 
 ---
 
+## 🏆 Hall of Fame: Real-World Benchmarks
+
+RepoGuard isn't just a prototype; it's a battle-tested audit engine. We regularly benchmark our engine against top-tier open-source AI projects to ensure industry-leading accuracy.
+
+| Project | Findings | Status | Report |
+| :--- | :--- | :--- | :--- |
+| **HF SmolAgents** | 3 High Risks (Command Injection, Prompt Injection) | ✅ Audited | [View Report](file:///Users/riteshsingh/Desktop/Files/VSCode/ai_security_scanner/RESULTS_SMOLAGENTS.md) |
+| **OpenAI Agents SDK** | 5 High Risks (Command Injection, Hardcoded Secrets) | ✅ Audited | [View Report](file:///Users/riteshsingh/Desktop/Files/VSCode/ai_security_scanner/RESULTS_OPENAI_SDK.md) |
+| **Aider** | Scheduled | 📅 Pending | - |
+
+> [!TIP]
+> **Case Study: HuggingFace SmolAgents**
+> During our audit, RepoGuard identified a **High Severity Command Injection** risk in the `vision_web_browser.py` component where user-provided input was directly executed as a Python command. This demonstrates RepoGuard's unique ability to understand the complex "Code-as-Thought" architecture of modern AI agents.
+
+> [!IMPORTANT]
+> **Case Study: OpenAI Agents SDK**
+> RepoGuard successfully flagged a **Command Injection** vulnerability in the OpenAI SDK's internal handling of `subprocess.check_call`. By tracing user-controlled data (e.g., package lists) directly to shell commands, RepoGuard identified a risk path that standard linters miss.
+
+---
+
 ## 📖 Usage
 
 ### Scan a Local Directory

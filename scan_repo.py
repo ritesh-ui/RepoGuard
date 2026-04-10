@@ -29,7 +29,7 @@ def clone_repo(repo_url, temp_dir, branch=None):
         console.print(f"[red]❌ Error cloning repository:[/red] {e.stderr}")
         return False
 
-def run_scan(repo_path, json_output=None, markdown_output=None):
+def run_scan(repo_path, json_output=None, markdown_output=None, limit=None):
     """Core scanning logic moved to a separate function for reusability."""
     # 1. Load files
     files = get_repo_files(repo_path)
@@ -62,11 +62,17 @@ def run_scan(repo_path, json_output=None, markdown_output=None):
         console.print("[green]✅ No suspicious patterns found during initial scan.[/green]")
         return all_findings
 
-    console.print(f"🔥 Found {len(hotspots)} potential hotspots. Analyzing with AI...")
-
     # 3. LLM analysis
+    total_hotspots = len(hotspots)
+    if limit and total_hotspots > limit:
+        console.print(f"🔥 Found {total_hotspots} potential hotspots. [bold yellow]Limiting AI analysis to the first {limit} targets...[/bold yellow]")
+        analysis_targets = hotspots[:limit]
+    else:
+        console.print(f"🔥 Found {total_hotspots} potential hotspots. Analyzing with AI...")
+        analysis_targets = hotspots
+
     with console.status("[bold yellow]AI is reasoning about vulnerabilities...[/bold yellow]") as status:
-        for hotspot in hotspots:
+        for hotspot in analysis_targets:
             result = analyze_vulnerability(hotspot)
             if result.get("vulnerability_found"):
                 # Clean up file path if it's in a temp directory
@@ -95,6 +101,7 @@ def main():
     parser.add_argument("--branch", help="Specific branch to scan (for remote repos)", metavar="BRANCH")
     parser.add_argument("--fail-on", help="Fail with exit code 1 if vulnerabilities of this severity or higher are found", 
                         choices=["Low", "Medium", "High", "Critical"], metavar="SEVERITY")
+    parser.add_argument("--limit", type=int, help="Limit the number of AI-analyzed hotspots (useful for large repos)")
     args = parser.parse_args()
 
     repo_path = args.repo_path
@@ -116,7 +123,7 @@ def main():
         with tempfile.TemporaryDirectory() as temp_dir:
             if clone_repo(repo_path, temp_dir, args.branch):
                 console.print(f"[bold blue]🚀 Starting scan on remote repo...[/bold blue]")
-                findings = run_scan(temp_dir, args.json, args.markdown)
+                findings = run_scan(temp_dir, args.json, args.markdown, args.limit)
             else:
                 sys.exit(1)
     else:
@@ -125,7 +132,7 @@ def main():
             sys.exit(1)
         
         console.print(f"[bold blue]🚀 Starting scan on:[/bold blue] {repo_path}")
-        findings = run_scan(repo_path, args.json, args.markdown)
+        findings = run_scan(repo_path, args.json, args.markdown, args.limit)
 
     # Exit code logic for CI/CD
     if args.fail_on:
