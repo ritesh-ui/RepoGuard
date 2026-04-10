@@ -1,0 +1,118 @@
+import os
+import argparse
+import tempfile
+import subprocess
+from file_loader import get_repo_files, read_file_content
+from scanner import scan_file, detect_ai_stack
+from llm_analyzer import analyze_vulnerability
+from reporter import report_findings_cli, report_findings_json, report_ai_stack, report_findings_markdown
+from rich.console import Console
+
+console = Console()
+
+def is_git_url(path):
+    """Checks if the path is a git URL."""
+    return path.startswith(('https://', 'http://', 'git@', 'ssh://'))
+
+def clone_repo(repo_url, temp_dir, branch=None):
+    """Clones a git repository into a temporary directory."""
+    console.print(f"[bold yellow]⏳ Cloning repository:[/bold yellow] {repo_url}")
+    command = ["git", "clone", "--depth", "1"]
+    if branch:
+        command.extend(["--branch", branch])
+    command.extend([repo_url, temp_dir])
+    
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]❌ Error cloning repository:[/red] {e.stderr}")
+        return False
+
+def run_scan(repo_path, json_output=None, markdown_output=None):
+    """Core scanning logic moved to a separate function for reusability."""
+    # 1. Load files
+    files = get_repo_files(repo_path)
+    console.print(f"🔍 Found {len(files)} supported files.")
+
+    all_findings = []
+    
+    # 2. Local pattern scan & AI Stack Detection
+    console.print("⏳ Performing initial pattern scanning...")
+    hotspots = []
+    detected_frameworks = set()
+    
+    for file_path in files:
+        lines = read_file_content(file_path)
+        if lines:
+            # Detect AI stack
+            stack = detect_ai_stack(lines)
+            detected_frameworks.update(stack)
+            
+            # Detect hotspots
+            file_hotspots = scan_file(file_path, lines)
+            hotspots.extend(file_hotspots)
+    
+    # Report AI Stack
+    ai_stack = sorted(list(detected_frameworks))
+    if ai_stack:
+        report_ai_stack(ai_stack)
+    
+    if not hotspots:
+        console.print("[green]✅ No suspicious patterns found during initial scan.[/green]")
+        return all_findings
+
+    console.print(f"🔥 Found {len(hotspots)} potential hotspots. Analyzing with AI...")
+
+    # 3. LLM analysis
+    with console.status("[bold yellow]AI is reasoning about vulnerabilities...[/bold yellow]") as status:
+        for hotspot in hotspots:
+            result = analyze_vulnerability(hotspot)
+            if result.get("vulnerability_found"):
+                # Clean up file path if it's in a temp directory
+                result["file"] = hotspot.file_path
+                result["line"] = hotspot.line_number
+                all_findings.append(result)
+            elif "error" in result:
+                console.print(f"[red]AI Error scanning {hotspot.file_path}: {result['error']}[/red]")
+
+    # 4. Reporting
+    report_findings_cli(all_findings)
+
+    if json_output:
+        report_findings_json(all_findings, json_output)
+    
+    if markdown_output:
+        report_findings_markdown(all_findings, markdown_output, ai_stack)
+    
+    return all_findings
+
+def main():
+    parser = argparse.ArgumentParser(description="RepoGuard: AI-Powered Repository Security Scanner")
+    parser.add_argument("repo_path", help="Path or Git URL of the repository to scan")
+    parser.add_argument("--json", help="Output findings to a JSON file", metavar="FILE")
+    parser.add_argument("--markdown", help="Output findings to a Markdown file", metavar="FILE")
+    parser.add_argument("--branch", help="Specific branch to scan (for remote repos)", metavar="BRANCH")
+    args = parser.parse_args()
+
+    repo_path = args.repo_path
+    
+    if is_git_url(repo_path):
+        # Use a temporary directory for remote clones
+        with tempfile.TemporaryDirectory() as temp_dir:
+            if clone_repo(repo_path, temp_dir, args.branch):
+                console.print(f"[bold blue]🚀 Starting scan on remote repo...[/bold blue]")
+                run_scan(temp_dir, args.json, args.markdown)
+            else:
+                return
+    else:
+        # Local path
+        if not os.path.isdir(repo_path):
+            console.print(f"[red]Error: {repo_path} is not a valid directory or Git URL.[/red]")
+            return
+        
+        console.print(f"[bold blue]🚀 Starting scan on:[/bold blue] {repo_path}")
+        run_scan(repo_path, args.json, args.markdown)
+
+if __name__ == "__main__":
+    main()

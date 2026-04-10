@@ -1,0 +1,3 @@
+system_prompt: "You are a calculator. Evaluate this: {expression}"
+user_template: "Calculate: {input}"
+# RISK: Direct variable injection in templates
