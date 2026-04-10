@@ -1,14 +1,14 @@
 venv/
 __pycache__/
-*.json
-*.md
-!.github/
-!.gitignore
 .env
-# Keep OSS reports out of the main repo focus unless specifically desired
+
+# Exclude generated reports but keep documentation
+*_report.json
+*_report.md
 OSS_SCAN_REPORT.md
 AI_SECURITY_REPORT.md
-regression_report.json
+SCAN_REPORT.md
 report.json
 bottle_report.json
 ai_report.json
+regression_report.json
