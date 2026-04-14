@@ -2,13 +2,35 @@ venv/
 __pycache__/
 .env
 
-# Exclude generated reports but keep documentation
+# Exclude generated reports and scan output
 *_report.json
 *_report.md
+regression_report.json
+enterprise_v2.json
+*.json
+!package.json
+!package-lock.json
+
+# Auto-generated Markdown reports
 OSS_SCAN_REPORT.md
 AI_SECURITY_REPORT.md
 SCAN_REPORT.md
-report.json
-bottle_report.json
-ai_report.json
-regression_report.json
+ENTERPRISE_SCAN.md
+ENTERPRISE_SCAN_V2.md
+JS_TS_VERIFICATION.md
+PRECISION_TEST.md
+TEST_RESULT.md
+TEST_REPORT.md
+VERIFY_REPORT.md
+RESULTS_*.md
+
+# Temporary scan directories and files
+temp_dir/
+temp_subprocess.py
+
+# Build artifacts
+*.pyc
+*.pyo
+build/
+dist/
+*.egg-info/

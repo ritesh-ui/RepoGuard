@@ -104,7 +104,7 @@ Security Category to Evaluate: {snippet_obj.pattern_type}"""
                     function_name = tool_call.function.name
                     function_args = tool_call.function.arguments
 
-                    print(f"\n[AGENT] Tracing payload... (Executing internal tool: {function_name})")
+                    from rich.console import Console as _C; _C().print(f"  [dim]↳ Agent: tracing via [italic]{function_name}[/italic]...[/dim]")
 
                     tool_result = execute_tool(function_name, function_args, snippet_obj.base_path)
 
