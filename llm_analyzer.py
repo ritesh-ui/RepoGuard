@@ -22,8 +22,6 @@ Respond ONLY with a JSON object in this format when finished:
     "vulnerability_found": true,
     "risk_type": "CORE Security Risk" | "AI Security Risk",
     "vulnerability_name": "Short name",
-    "severity": "Critical" | "High" | "Medium" | "Low",
-    "owasp_category": "e.g., A03:2021-Injection",
     "function_name": "The name of the function containing the finding",
     "vulnerable_variable": "The name of the tainted variable",
     "vulnerable_syntax": "The exact line of code causing the risk",

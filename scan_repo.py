@@ -3,7 +3,7 @@ import argparse
 import tempfile
 import subprocess
 from file_loader import get_repo_files, read_file_content
-from scanner import scan_file, detect_ai_stack
+from scanner import scan_file, detect_ai_stack, VULN_METADATA
 from llm_analyzer import analyze_vulnerability
 from reporter import report_findings_cli, report_findings_json, report_ai_stack, report_findings_markdown
 from rich.console import Console
@@ -100,9 +100,15 @@ def run_scan(repo_path, json_output=None, markdown_output=None, limit=None):
 
         for result, hotspot in future_results:
             if result.get("vulnerability_found"):
-                # Clean up file path if it's in a temp directory
+                # Apply deterministic metadata if available
+                metadata = VULN_METADATA.get(hotspot.pattern_type, {})
+                
                 result["file"] = hotspot.file_path
                 result["line"] = hotspot.line_number
+                result["severity"] = metadata.get("base_severity", result.get("severity", "High"))
+                result["owasp_category"] = metadata.get("owasp", "N/A")
+                result["cwe"] = metadata.get("cwe", "N/A")
+                
                 all_findings.append(result)
             elif "error" in result:
                 console.print(f"[red]AI Error scanning {hotspot.file_path}: {result['error']}[/red]")

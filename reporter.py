@@ -63,6 +63,7 @@ def report_findings_cli(findings):
 [bold]Vulnerability:[/bold] {vuln_name}
 [bold]Severity:[/bold] [{color}]{severity}[/{color}]
 [bold]OWASP Category:[/bold] {f.get('owasp_category', 'N/A')}
+[bold]CWE Indicator:[/bold] {f.get('cwe', 'N/A')}
 
 [bold]Attack Vector:[/bold]
 {f.get('attack_vector', 'N/A')}
@@ -116,6 +117,7 @@ def report_findings_markdown(findings, output_file, ai_stack=None):
                     f.write(f"- **Variable**: `{fn.get('vulnerable_variable', 'Unknown')}`\n")
                     f.write(f"- **Syntax**: `{fn.get('vulnerable_syntax', 'N/A')}`\n")
                     f.write(f"- **OWASP Category**: {fn.get('owasp_category', 'N/A')}\n")
+                    f.write(f"- **CWE Indicator**: {fn.get('cwe', 'N/A')}\n")
                     f.write(f"- **Severity**: {severity}\n\n")
                     f.write(f"> **Description**: {fn.get('description', 'N/A')}\n\n")
                     f.write(f"#### 🏹 Attack Vector\n{fn.get('attack_vector', 'N/A')}\n\n")

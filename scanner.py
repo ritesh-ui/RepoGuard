@@ -52,6 +52,49 @@ AI_FRAMEWORK_PATTERNS = {
     'FAISS': r'faiss'
 }
 
+VULN_METADATA = {
+    'Hardcoded Secret': {
+        'owasp': 'A07:2021-Identification and Authentication Failures',
+        'cwe': 'CWE-798',
+        'base_severity': 'High'
+    },
+    'SQL Injection Pattern': {
+        'owasp': 'A03:2021-Injection',
+        'cwe': 'CWE-89',
+        'base_severity': 'Critical'
+    },
+    'Unsafe Eval/Exec': {
+        'owasp': 'A03:2021-Injection',
+        'cwe': 'CWE-94',
+        'base_severity': 'Critical'
+    },
+    'Command Execution': {
+        'owasp': 'A03:2021-Injection',
+        'cwe': 'CWE-78',
+        'base_severity': 'Critical'
+    },
+    'Prompt Injection Risk': {
+        'owasp': 'LLM01:2023-Prompt Injection',
+        'cwe': 'CWE-116',
+        'base_severity': 'High'
+    },
+    'Unsafe Tool/Agent Usage': {
+        'owasp': 'LLM08:2023-Excessive Agency',
+        'cwe': 'CWE-250',
+        'base_severity': 'Critical'
+    },
+    'Sensitive Data in Prompt': {
+        'owasp': 'LLM06:2023-Sensitive Information Disclosure',
+        'cwe': 'CWE-200',
+        'base_severity': 'High'
+    },
+    'Vector DB Risk': {
+        'owasp': 'A03:2021-Injection',
+        'cwe': 'CWE-89',
+        'base_severity': 'Medium'
+    }
+}
+
 def detect_ai_stack(file_contents):
     """
     Identifies which AI frameworks are used in the project.
