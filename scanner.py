@@ -30,8 +30,8 @@ PATTERNS = {
         'Command Execution': r'(?i)(os\.(system|popen)|subprocess\.(run|call|Popen|check_output|check_call)\(.*shell=True)',
     },
     'AI_SPECIFIC': {
-        # Tightened to only match when variables look like prompts or templates
-        'Prompt Injection Risk': r'(?i)\.template\s*=|\.render\(|PromptTemplate\(|f[\'"].*\{[a-zA-Z_][a-zA-Z0-9_]*prompt.*\}[\'"]|\{\{.*\}\}',
+        # Tightened: only match .format or f-strings if 'prompt' or 'template' is in the line
+        'Prompt Injection Risk': r'(?i)(prompt|template).*\.format\(|\.template\s*=|\.render\(|PromptTemplate\(|f[\'"].*(prompt|template).*\{[a-zA-Z_].*\}[\'"]|\{\{.*\}\}',
         # repoguard-ignore-next-line
         'Unsafe Tool/Agent Usage': r'ShellTool|PythonREPL|exec\(',
         # repoguard-ignore-next-line

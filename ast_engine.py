@@ -166,9 +166,11 @@ class ASTScanner(ast.NodeVisitor):
         old_taint = self.tainted_vars.copy()
         old_explicit = self.explicit_sources.copy()
         
-        # Entry points: Function arguments are considered tainted (but Low Confidence)
+        # Entry points: Function arguments are considered tainted
         for arg in node.args.args:
             self.tainted_vars.add(arg.arg)
+            if any(hint in arg.arg.lower() for hint in UNTRUSTED_VAR_HINTS):
+                self.explicit_sources.add(arg.arg)
         
         # Visit children
         self.generic_visit(node)
