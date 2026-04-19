@@ -1,7 +1,10 @@
 import os
 
 SUPPORTED_EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.yaml', '.txt'}
-IGNORE_DIRS = {'.git', 'node_modules', '__pycache__', 'venv', '.venv', 'env', '.env', 'dist', 'build', 'docs'}
+IGNORE_DIRS = {
+    '.git', 'node_modules', '__pycache__', 'venv', '.venv', 'env', '.env', 
+    'dist', 'build', 'docs', 'test_repo', 'ai_test_repo', 'test_cases', 'examples'
+}
 REPOGUARD_CORE_FILES = {
     'scanner.py', 'llm_analyzer.py', 'ast_engine.py', 
     'agent_tools.py', 'file_loader.py', 'reporter.py', 'scan_repo.py'
