@@ -21,17 +21,16 @@ SANITIZER_FUNCTIONS = {
 
 # Explicit Untrusted Source identifiers used to assign High confidence
 UNTRUSTED_SOURCES = {
-    # Python
-    'sys.argv', 'os.environ', 'request', 'request.args', 'request.form',
-    'request.values', 'request.json', 'flask.request', 'django.request',
-    'request.GET', 'request.POST', 'input',
+    # Python Web Framework Entrypoints
+    'request', 'request.args', 'request.form', 'request.values', 
+    'request.json', 'request.files', 'request.headers',
+    'flask.request', 'django.request', 'request.GET', 'request.POST',
+    'input', 'sys.argv', 'os.environ',
     # JS/TS
-    'req.body', 'req.query', 'req.params', 'process.env', 'process.argv',
-    'request.body', 'request.query',
-    # Java
-    'request.getParameter', 'System.getenv', 'request.getHeader',
-    # Go
-    'r.URL.Query', 'r.FormValue', 'os.Getenv', 'os.Args'
+    'req.body', 'req.query', 'req.params', 'request.body', 'request.query',
+    'process.env', 'process.argv',
+    # Java/Go
+    'request.getParameter', 'System.getenv', 'r.URL.Query', 'os.Getenv'
 }
 
 # Identifier fragments used by TreeSitter scanner to assign High confidence
@@ -166,10 +165,13 @@ class ASTScanner(ast.NodeVisitor):
         old_taint = self.tainted_vars.copy()
         old_explicit = self.explicit_sources.copy()
         
-        # Entry points: Function arguments are considered tainted
+        # Entry points: Function arguments are considered tainted. 
+        # For World-Class precision, we mark them High Confidence if they match 
+        # known framework-style 'untrusted' signatures.
         for arg in node.args.args:
             self.tainted_vars.add(arg.arg)
-            if any(hint in arg.arg.lower() for hint in UNTRUSTED_VAR_HINTS):
+            # Conventional handler signatures: request, req, payload, data
+            if arg.arg.lower() in {'request', 'req', 'request_data', 'request_params', 'payload', 'user_input'}:
                 self.explicit_sources.add(arg.arg)
         
         # Visit children

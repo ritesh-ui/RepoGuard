@@ -202,9 +202,28 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
     has_ai_stack = len(ai_stack) > 0
 
     # 3. Regex Fallback
+    in_docstring = False
     for i, line in enumerate(lines):
         clean_line = line.strip()
         
+        # [Precision]: Track docstring state (triple quotes)
+        # Flip state if we hit a docstring marker
+        if '"""' in clean_line or "'''" in clean_line:
+            # If it's a single-line docstring e.g. """doc""", state flips twice (stays same)
+            # but if it starts on one line and ends on another, state changes.
+            # This is a simplified tracker for CI-speed SAST.
+            if clean_line.count('"""') % 2 != 0 or clean_line.count("'''") % 2 != 0:
+                in_docstring = not in_docstring
+                # If we just entered a docstring, skip this line too
+                if in_docstring: continue
+                # If we just exited, we can't reliably skip the exit line because it might contain code
+            else:
+                # Same-line docstring marker, always skip
+                continue
+
+        if in_docstring:
+            continue
+
         # [Fix #3]: Check for inline developer ignore directives for Regex
         current_line_text = line.lower()
         prev_line_text = lines[i - 1].lower() if i > 0 else ""
