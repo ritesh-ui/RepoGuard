@@ -1,8 +1,4 @@
 import ast
-try:
-    from tree_sitter_languages import get_parser
-except ImportError:
-    get_parser = None
 from dataclasses import dataclass
 from typing import List, Set, Dict, Optional
 
@@ -313,7 +309,14 @@ class TreeSitterScanner:
         self.language = language
         self.source_lines = source_code.splitlines()
         self.source_bytes = source_code.encode('utf-8')
-        self.parser = get_parser(language)
+        
+        # Lazy import to avoid top-level dependency crash
+        try:
+            from tree_sitter_languages import get_parser
+            self.parser = get_parser(language)
+        except ImportError:
+            self.parser = None
+            
         self.tainted_vars = set()
         self.explicit_sources = set()
         self.findings: List[TaintFlow] = []
@@ -577,6 +580,8 @@ def analyze_enterprise_taint(file_path: str, code: str) -> List[TaintFlow]:
     lang = ext_map[ext]
     try:
         scanner = TreeSitterScanner(lang, code)
+        if not scanner.parser:
+            return []
         tree = scanner.parser.parse(code.encode('utf-8'))
         scanner.trace_node(tree.root_node)
         return scanner.findings
