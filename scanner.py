@@ -30,7 +30,8 @@ PATTERNS = {
         'Command Execution': r'(?i)(os\.(system|popen)|subprocess\.(run|call|Popen|check_output|check_call)\(.*shell=True)',
     },
     'AI_SPECIFIC': {
-        'Prompt Injection Risk': r'(?i)\.format\(|f[\'"].*\{[a-zA-Z_][a-zA-Z0-9_]*\}[\'"]|\{\{.*\}\}|\{[a-zA-Z_][a-zA-Z0-9_]*\}|template\.render\(',
+        # Tightened to only match when variables look like prompts or templates
+        'Prompt Injection Risk': r'(?i)\.template\s*=|\.render\(|PromptTemplate\(|f[\'"].*\{[a-zA-Z_][a-zA-Z0-9_]*prompt.*\}[\'"]|\{\{.*\}\}',
         # repoguard-ignore-next-line
         'Unsafe Tool/Agent Usage': r'ShellTool|PythonREPL|exec\(',
         # repoguard-ignore-next-line
@@ -210,10 +211,11 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
         if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
             continue
             
-        # [Fix #2]: Strip comments to prevent regex from flagging documentation
+        # [Fix #2]: Robust comment stripping to prevent regex from flagging documentation
+        # Handle #, //, and start of block comments
         clean_code = re.sub(r'(?:^\s*|\s+)(//|#).*$', '', clean_line).strip()
         
-        if not clean_code or clean_code.startswith('/*') or clean_code.startswith('*'):
+        if not clean_code or clean_code.startswith(('/*', '*', '"""', "'''")):
             continue
             
         # Iterate through General and AI-specific patterns
