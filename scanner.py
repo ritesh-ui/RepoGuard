@@ -127,63 +127,71 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
     
     # 1. AST Analysis (Python)
     if file_path.endswith('.py'):
-        ast_processed = True
-        results = analyze_python_taint(file_path, source_code)
-        for r in results:
-            if r.confidence == "Low":
-                continue # Heavently deprioritize or filter out generic parameter trace flow
+        try:
+            ast_processed = True
+            results = analyze_python_taint(file_path, source_code)
+            for r in results:
+                if r.confidence == "Low":
+                    continue # Heavently deprioritize or filter out generic parameter trace flow
 
-            lineno = min(r.lineno, max_line)
-            
-            # [Fix #3]: Check for inline developer ignore directives
-            current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
-            prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
-            if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
-                continue
+                lineno = min(r.lineno, max_line)
+                
+                # [Fix #3]: Check for inline developer ignore directives
+                current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
+                prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
+                if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
+                    continue
 
-            detections.append(DetectedSnippet(
-                file_path=file_path,
-                line_number=lineno,
-                snippet=lines[lineno-1].strip() if lineno > 0 else "",
-                context_above=[], 
-                context_below=[],
-                pattern_type=r.sink_type,
-                code_slice=r.code_slice,
-                tainted_vars=r.tainted_vars,
-                function_name=r.function_name,
-                vulnerable_syntax=r.vulnerable_syntax,
-                base_path=base_path
-            ))
+                detections.append(DetectedSnippet(
+                    file_path=file_path,
+                    line_number=lineno,
+                    snippet=lines[lineno-1].strip() if lineno > 0 else "",
+                    context_above=[], 
+                    context_below=[],
+                    pattern_type=r.sink_type,
+                    code_slice=r.code_slice,
+                    tainted_vars=r.tainted_vars,
+                    function_name=r.function_name,
+                    vulnerable_syntax=r.vulnerable_syntax,
+                    base_path=base_path
+                ))
+        except Exception as e:
+            from rich.console import Console as _C; _C().print(f"[dim]  (Python AST scan skipped for {file_path}: {e})[/dim]")
+            ast_processed = False
 
     # 2. Enterprise AST Analysis (JS/TS/JSX/TSX/Java/Go)
     if file_path.endswith(('.js', '.ts', '.jsx', '.tsx', '.java', '.go')):
-        ast_processed = True
-        results = analyze_enterprise_taint(file_path, source_code)
-        for r in results:
-            if r.confidence == "Low":
-                continue # Filter out generic parameters
+        try:
+            ast_processed = True
+            results = analyze_enterprise_taint(file_path, source_code)
+            for r in results:
+                if r.confidence == "Low":
+                    continue # Filter out generic parameters
 
-            lineno = min(r.lineno, max_line)
-            
-            # [Fix #3]: Check for inline developer ignore directives
-            current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
-            prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
-            if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
-                continue
+                lineno = min(r.lineno, max_line)
+                
+                # [Fix #3]: Check for inline developer ignore directives
+                current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
+                prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
+                if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
+                    continue
 
-            detections.append(DetectedSnippet(
-                file_path=file_path,
-                line_number=lineno,
-                snippet=lines[lineno-1].strip() if lineno > 0 else "",
-                context_above=[],
-                context_below=[],
-                pattern_type=r.sink_type,
-                code_slice=r.code_slice,
-                tainted_vars=r.tainted_vars,
-                function_name=r.function_name,
-                vulnerable_syntax=r.vulnerable_syntax,
-                base_path=base_path
-            ))
+                detections.append(DetectedSnippet(
+                    file_path=file_path,
+                    line_number=lineno,
+                    snippet=lines[lineno-1].strip() if lineno > 0 else "",
+                    context_above=[],
+                    context_below=[],
+                    pattern_type=r.sink_type,
+                    code_slice=r.code_slice,
+                    tainted_vars=r.tainted_vars,
+                    function_name=r.function_name,
+                    vulnerable_syntax=r.vulnerable_syntax,
+                    base_path=base_path
+                ))
+        except Exception as e:
+            from rich.console import Console as _C; _C().print(f"[dim]  (Enterprise AST scan skipped for {file_path}: {e})[/dim]")
+            ast_processed = False
 
     # Detect AI stack once for the whole file
     ai_stack = detect_ai_stack(lines)

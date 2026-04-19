@@ -1,3 +1,5 @@
 openai
 python-dotenv
 rich
+tree-sitter
+tree-sitter-languages

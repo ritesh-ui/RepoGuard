@@ -1,5 +1,8 @@
 import ast
-from tree_sitter_languages import get_parser
+try:
+    from tree_sitter_languages import get_parser
+except ImportError:
+    get_parser = None
 from dataclasses import dataclass
 from typing import List, Set, Dict, Optional
 
