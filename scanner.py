@@ -1,5 +1,5 @@
 import re
-from ast_engine import analyze_python_taint, analyze_enterprise_taint
+from ast_engine import analyze_python_taint, analyze_enterprise_taint, GLOBAL_PROPAGATION_MAP
 
 class DetectedSnippet:
     def __init__(self, file_path, line_number, snippet, context_above, context_below, pattern_type, code_slice=None, tainted_vars=None, function_name="global", vulnerable_syntax="", base_path=""):
@@ -27,7 +27,7 @@ PATTERNS = {
         'Hardcoded Secret': r'(?i)(api[_-]?key|password|secret|token|apikey)\s*=\s*[\'"][a-zA-Z0-9_\-\.\~]{8,}[\'"]',
         'SQL Injection Pattern': r'(?i)(SELECT|INSERT|UPDATE|DELETE).*\+.*|\b(execute|query)\(.*\+.*',
         'Unsafe Eval/Exec': r'(?i)(eval|exec)\(',
-        'Command Execution': r'(?i)(os\.(system|popen)|subprocess\.(run|call|Popen|check_output|check_call)\(.*shell=True)',
+        'Command Execution': r'(?i)(os\.(system|popen)|subprocess\.(run|call|Popen|check_output|check_call)\()',
     },
     'AI_SPECIFIC': {
         # Tightened: only match .format or f-strings if 'prompt' or 'template' is in the line
@@ -176,7 +176,8 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
     if file_path.endswith('.py'):
         try:
             ast_processed = True
-            results = analyze_python_taint(file_path, source_code)
+            # [Fix #1]: Inter-Procedural Propagation awareness
+            results = analyze_python_taint(file_path, source_code, GLOBAL_PROPAGATION_MAP)
             for r in results:
                 if r.confidence == "Low":
                     continue # Heavently deprioritize or filter out generic parameter trace flow
@@ -244,27 +245,43 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
     ai_stack = detect_ai_stack(lines)
     has_ai_stack = len(ai_stack) > 0
 
-    # 3. Regex Fallback
-    in_docstring = False
+    # 3. Regex Fallback with Structural Analysis
+    in_block = False
+    block_marker = None
+
     for i, line in enumerate(lines):
         clean_line = line.strip()
         
-        # [Precision]: Track docstring state (triple quotes)
-        # Flip state if we hit a docstring marker
-        if '"""' in clean_line or "'''" in clean_line:
-            # If it's a single-line docstring e.g. """doc""", state flips twice (stays same)
-            # but if it starts on one line and ends on another, state changes.
-            # This is a simplified tracker for CI-speed SAST.
-            if clean_line.count('"""') % 2 != 0 or clean_line.count("'''") % 2 != 0:
-                in_docstring = not in_docstring
-                # If we just entered a docstring, skip this line too
-                if in_docstring: continue
-                # If we just exited, we can't reliably skip the exit line because it might contain code
-            else:
-                # Same-line docstring marker, always skip
-                continue
+        # [Precision]: Lexical Boundary Tracking (Strings vs Comments)
+        # We need to know if markers like /* or # are inside a string literal.
+        if not in_block:
+            # 1. Temporarily remove string literals from the line for structural analysis
+            # This handles escaped quotes: \" or \'
+            stripped_line = re.sub(r'"(?:\\.|[^"])*"|\'(?:\\.|[^\'])*\'', '""', line)
+            
+            # 2. Check for multi-line block starts in the string-stripped code
+            if '"""' in stripped_line:
+                in_block = True; block_marker = '"""'
+            elif "'''" in stripped_line:
+                in_block = True; block_marker = "'''"
+            elif '/*' in stripped_line:
+                in_block = True; block_marker = '/*'
+            
+            # Handle single-line docstrings or block comments: """ ... """
+            if in_block:
+                end_marker = '*/' if block_marker == '/*' else block_marker
+                # We check the ORIGINAL line for the end marker, but ONLY after the start marker
+                start_pos = line.find(block_marker)
+                if line.find(end_marker, start_pos + len(block_marker)) != -1:
+                    in_block = False; block_marker = None
+        else:
+            # We are inside a block, look for the closer
+            end_marker = '*/' if block_marker == '/*' else block_marker
+            if end_marker in line:
+                in_block = False; block_marker = None
+            continue # Always skip lines inside blocks
 
-        if in_docstring:
+        if in_block:
             continue
 
         # [Fix #3]: Check for inline developer ignore directives for Regex

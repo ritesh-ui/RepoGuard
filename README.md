@@ -1,79 +1,79 @@
-# 🛡️ RepoGuard: AI-Powered Security Scanner
+# 🛡️ RepoGuard: Deterministic AI Security Engine
 
-A high-performance CLI tool and CI/CD guardian designed to identify both **traditional security vulnerabilities** and **modern AI/LLM-specific risks** in your codebases. 
+**The next generation of AppSec.** RepoGuard is a high-performance security engine that eliminates the "False Positive tax" by merging the surgical precision of **Abstract Syntax Trees (AST)** with the deep reasoning of **Autonomous AI Agents**.
 
 [![RepoGuard Security Scan](https://github.com/ritesh-ui/RepoGuard/actions/workflows/repoguard.yml/badge.svg)](https://github.com/ritesh-ui/RepoGuard/actions/workflows/repoguard.yml)
 [![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
-[![AI Powered](https://img.shields.io/badge/AI-Powered-purple.svg)](https://openai.com/)
+[![Performance](https://img.shields.io/badge/Parallel-Scale-green.svg)](#)
 
 ---
 
-## 🔥 Why RepoGuard?
+## ⚡ The Deterministic Moat
 
-Traditional static analysis security tools (SAST) often suffer from high false-positive rates and struggle with the dynamic nature of modern AI applications. **RepoGuard** stands out by combining the speed of pattern matching with the deep contextual reasoning of Large Language Models (LLMs).
+Legacy SAST tools generate noise. Naive AI scanners are slow and hallucinate. **RepoGuard wins by being Hybrid.**
 
-### 🚀 How RepoGuard Stands Out:
-- **Context-Aware Auditing**: Unlike simple regex-based tools, RepoGuard uses AI to understand *intent*. It doesn't just find a dangerous function; it reasons whether it's actually vulnerable in the context of your code.
-- **AI-Native Security**: Specialized specifically for the modern AI stack. We detect **Prompt Injection**, **Vector DB Poisoning**, and **Unsafe Agent Tools**—vulnerabilities that traditional scanners completely miss.
-- **Multi-Language AST Support**: Deep taint analysis for **Python** and **JavaScript/TypeScript** using industry-standard AST engines.
-- **Zero-Config Intelligence**: No need for complex rule tuning. The LLM handles the complex security logic, providing instant, human-readable remediation advice for every finding.
+1.  **Phase 1: Deterministic Filter (The Scalpel)**
+    Our custom Two-Pass engine scans thousands of files in parallel. It doesn't just look for strings; it maps Abstract Syntax Trees to identify structurally valid vulnerability paths.
+2.  **Phase 2: Agentic Forensics (The Brain)**
+    Instead of flagging every "hotspot," RepoGuard launches an **Autonomous Security Agent**. If a finding is ambiguous, the Agent uses dynamic tools (`read_file`, `text_search`) to contextually trace variable origins across file boundaries before rendering a verdict.
 
 ---
 
 ## 🚀 Key Features
 
-### 1. Unified Security Scan (AST-Powered)
-- **Deep Taint Analysis**: Traces user input from entry points to dangerous "sinks" (DB, Shell, AI models).
-- **Core Risks**: Hardcoded secrets, SQL Injection, Unsafe `eval()`.
-- **AI Risks**: Prompt Injection, Vector Poisoning, Unsafe Agent Tools.
+### 🔍 Precision Audit Engine
+- **Inter-Procedural Taint Tracking**: A two-pass architecture that builds a global function propagation map. We track user-controlled data even when it's passed through multiple helper functions.
+- **Flow-Sensitive Analysis**: Understands variable overrides. If a tainted variable is reassigned to a safe literal, RepoGuard dynamically clears the risk.
+- **Word-Boundary Intelligence**: Semantic segment-splitting prevents false positives on names like `metadata` or `target`.
 
-### 2. CI/CD Integration
-- **Automated Workflows**: Seamlessly integrate with GitHub Actions.
-- **Fail-on-Vulnerability**: Block merges if critical security risks are detected.
-- **Professional Reporting**: Export findings to CLI, JSON, or professional Markdown (README format).
+### 🛡️ Enterprise Language Support
+Deep AST and Tree-Sitter support for:
+- **Python** (Native ast.NodeVisitor)
+- **JavaScript / TypeScript** (Tree-Sitter)
+- **Java** (Tree-Sitter)
+- **Go** (Tree-Sitter)
+
+### 🤖 AI-Native Security (LLM Security)
+Specialized detection for vulnerabilities standard scanners miss:
+- **Prompt Injection**: LLM01:2023 tracing.
+- **Insecure Tool/Agent Usage**: LLM08:2023 Excessive Agency.
+- **Sensitive Information Disclosure in Prompts**: LLM06:2023.
 
 ---
 
-## 🏗 Architecture
+## 🏗 High-Level Architecture
 
 ```mermaid
 graph TD
-    CLI[scan_repo.py] --> FL[file_loader.py]
-    CLI --> SC[scanner.py]
-    SC --> AST[ast_engine.py]
-    AST -->|Data Flow Analysis| Slice[Code Slices]
-    Slice --> LLM[llm_analyzer.py]
-    LLM -->|GPT-4o-mini Reasoning| Findings[Vulnerability Findings]
-    Findings --> REP[reporter.py]
-    REP -->|Output| CLI_Out[CLI Table]
-    REP -->|Output| JSON_Out[JSON File]
-    REP -->|Output| MD_Out[Markdown Report]
+    CLI[scan_repo.py] --> P1[Pass 1: Global Prop Map Builder]
+    P1 -->|Parallel Processes| Map[Inter-Procedural Taint Map]
+    Map --> P2[Pass 2: Deep Pattern Scanner]
+    P2 -->|Hotspots| Agent[Autonomous Forensic Agent]
+    Agent -->|Tool Use: read_file| Root[Variable Root Tracing]
+    Agent -->|Tool Use: text_search| Cross[Cross-File Validation]
+    Root --> Logic[Deterministic Logic Check]
+    Logic --> Result[Verified Vulnerability]
+    Result --> Report[MD/JSON/CLI Reports]
 ```
 
 ---
 
-## 🛠 Installation
+## 🛠 Installation & Setup
 
-1. **Clone the repo**:
+1. **Clone and Enter**:
    ```bash
-   git clone https://github.com/ritesh-ui/RepoGuard.git
-   cd RepoGuard
+   git clone https://github.com/ritesh-ui/RepoGuard.git && cd RepoGuard
    ```
 
-2. **Setup Virtual Environment**:
+2. **Environment Setup**:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install Dependencies**:
-   ```bash
+   python3 -m venv venv && source venv/bin/activate
    pip install -r requirements.txt
    pip install tree-sitter tree-sitter-languages
    ```
 
-4. **Configure OpenAI API**:
-   Create a `.env` file in the root directory:
+3. **Configure API**:
+   Create a `.env` file:
    ```env
    OPENAI_API_KEY=your_key_here
    OPENAI_MODEL=gpt-4o-mini
@@ -81,75 +81,37 @@ graph TD
 
 ---
 
-## 🤖 GitHub Actions Integration
+## 📖 Usage
 
-RepoGuard is built to work seamlessly in your CI/CD pipeline. 
+### Standard Scan
+```bash
+python3 scan_repo.py /path/to/repo
+```
 
-### 1. Setup Secrets
-- Go to your repository **Settings** > **Secrets and variables** > **Actions**.
-- Add a new secret named `OPENAI_API_KEY` with your OpenAI key.
+### Enterprise CI/CD Scan (Fail on High/Critical)
+```bash
+python3 scan_repo.py . --fail-on High --markdown SECURITY_REPORT.md
+```
 
-### 2. Add Workflow
-Create `.github/workflows/repoguard.yml` in your repository. This will automatically scan your project on every push:
-
-```yaml
-name: RepoGuard Security Scan
-
-on: [push, pull_request]
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.9' }
-      - run: pip install -r requirements.txt && pip install tree-sitter tree-sitter-languages
-      - env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python scan_repo.py . --markdown SECURITY_REPORT.md --fail-on Critical
+### Remote Repository Audit
+```bash
+python3 scan_repo.py https://github.com/org/repo --branch main
 ```
 
 ---
 
-## 🏆 Hall of Fame: Real-World Benchmarks
-
-RepoGuard isn't just a prototype; it's a battle-tested audit engine. We regularly benchmark our engine against top-tier open-source AI projects to ensure industry-leading accuracy.
+## 🏆 Case Studies: Real-World Impacts
 
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
-| **HF SmolAgents** | 3 High Risks (Command Injection, Prompt Injection) | ✅ Audited | [View Report](./RESULTS_SMOLAGENTS.md) |
-| **OpenAI Agents SDK** | 5 High Risks (Command Injection, Hardcoded Secrets) | ✅ Audited | [View Report](./RESULTS_OPENAI_SDK.md) |
-| **Aider** | Scheduled | 📅 Pending | - |
-
-> [!TIP]
-> **Case Study: HuggingFace SmolAgents**
-> During our audit, RepoGuard identified a **High Severity Command Injection** risk in the `vision_web_browser.py` component where user-provided input was directly executed as a Python command. This demonstrates RepoGuard's unique ability to understand the complex "Code-as-Thought" architecture of modern AI agents.
+| **HF SmolAgents** | 3 High Risks (Command Injection) | ✅ Fixed | [View Report](./reports/benchmarks/RESULTS_SMOLAGENTS.md) |
+| **OpenAI Agents SDK** | 5 Critical Risks (Subprocess Injection) | ✅ Fixed | [View Report](./reports/benchmarks/RESULTS_OPENAI_SDK.md) |
 
 > [!IMPORTANT]
-> **Case Study: OpenAI Agents SDK**
-> RepoGuard successfully flagged a **Command Injection** vulnerability in the OpenAI SDK's internal handling of `subprocess.check_call`. By tracing user-controlled data (e.g., package lists) directly to shell commands, RepoGuard identified a risk path that standard linters miss.
-
----
-
-## 📖 Usage
-
-### Scan a Local Directory
-```bash
-python3 scan_repo.py /path/to/your/repo
-```
-
-### Fail Build on High/Critical Risks
-```bash
-python3 scan_repo.py /path/to/repo --fail-on High
-```
-
-### Scan a Remote Git URL
-```bash
-python3 scan_repo.py https://github.com/user/repo --branch main
-```
+> **Case Study: Agentic Reasoning**
+> In a recent audit of the OpenAI Agents SDK, RepoGuard successfully traced a `subprocess.check_call` vulnerability by identifying that a "safe-looking" package list was actually sourced from external user intent across three nested function calls—a flow that every other modern scanner missed.
 
 ---
 
 ## 🛡️ License
-Distribute under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENSE` for more information.

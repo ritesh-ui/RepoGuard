@@ -1,6 +1,7 @@
 import os
 import re
 import json
+from collections import OrderedDict
 
 def restrict_path(base_path: str, target_path: str) -> str:
     """Ensures the target path is within the safe base repository path."""
@@ -9,13 +10,21 @@ def restrict_path(base_path: str, target_path: str) -> str:
         raise ValueError("Paths outside the repository are restricted.")
     return target
 
-# Global cache to prevent redundant file reads across agent turns
-_FILE_CACHE = {}
+# Bounded LRU cache to prevent unbounded memory growth across agent turns.
+# Evicts least-recently-used entries when capacity is exceeded.
+_FILE_CACHE_MAX = 128
+_FILE_CACHE = OrderedDict()
+
+def clear_file_cache():
+    """Clears the file cache. Call between scan runs to free memory."""
+    _FILE_CACHE.clear()
 
 def read_file(filepath: str, base_path: str) -> str:
-    """Reads the contents of a file within the repository, with memory caching."""
+    """Reads the contents of a file within the repository, with LRU caching."""
     cache_key = (base_path, filepath)
     if cache_key in _FILE_CACHE:
+        # Move to end (most recently used)
+        _FILE_CACHE.move_to_end(cache_key)
         return _FILE_CACHE[cache_key]
 
     try:
@@ -27,6 +36,11 @@ def read_file(filepath: str, base_path: str) -> str:
             
         # Add line numbers for context
         content = "".join([f"{i+1}: {line}" for i, line in enumerate(lines)])
+        
+        # Evict oldest entry if cache is full
+        if len(_FILE_CACHE) >= _FILE_CACHE_MAX:
+            _FILE_CACHE.popitem(last=False)  # Remove least recently used
+        
         _FILE_CACHE[cache_key] = content
         return content
     except Exception as e:

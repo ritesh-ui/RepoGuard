@@ -1,12 +1,15 @@
 import os
+import sys
 import argparse
 import tempfile
 import subprocess
 from file_loader import get_repo_files, read_file_content
 from scanner import scan_file, detect_ai_stack, VULN_METADATA
-from llm_analyzer import analyze_vulnerability
+from llm_analyzer import analyze_vulnerability, analyze_vulnerabilities_batch
+from ast_engine import run_taint_pre_pass_single, merge_propagation_maps, GLOBAL_PROPAGATION_MAP
 from reporter import report_findings_cli, report_findings_json, report_ai_stack, report_findings_markdown
 from rich.console import Console
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 console = Console()
 
@@ -29,52 +32,97 @@ def clone_repo(repo_url, temp_dir, branch=None):
         console.print(f"[red]❌ Error cloning repository:[/red] {e.stderr}")
         return False
 
-def run_scan(repo_path, json_output=None, markdown_output=None, limit=None):
-    """Core scanning logic moved to a separate function for reusability."""
+def process_file_patterns(file_arg):
+    """Helper for parallel pattern scanning.
+    Receives (file_path, repo_path, propagation_map) as a single tuple.
+    Injects the propagation map into the scanner module so inter-procedural
+    taint tracking works correctly in child processes.
+    """
+    file_path, repo_path, prop_map = file_arg
+    
+    # [Critical Fix]: Inject the propagation map into the ast_engine module
+    # inside this child process so that analyze_python_taint() can use it.
+    # We convert tainted_indices back from list to set (serialized for pickling).
+    import ast_engine
+    deserialized_map = {k: {'tainted_indices': set(v['tainted_indices'])} for k, v in prop_map.items()}
+    ast_engine.GLOBAL_PROPAGATION_MAP.clear()
+    ast_engine.GLOBAL_PROPAGATION_MAP.update(deserialized_map)
+    
+    lines = read_file_content(file_path)
+    if not lines: return [], set()
+    
+    stack = detect_ai_stack(lines)
+    hotspots = scan_file(file_path, lines, base_path=repo_path)
+    return hotspots, set(stack)
+
+def run_scan(repo_path, json_output=None, markdown_output=None, limit=None, max_workers=None):
+    """Core scanning logic with Parallelism and Batching."""
     # 1. Load files
     files = get_repo_files(repo_path)
     console.print(f"🔍 Found {len(files)} supported files.")
 
-    all_findings = []
+    # 2. Global Taint Discovery (Pass 1 - Parallel)
+    console.print("⏳ Building Inter-Procedural Taint Map (Pass 1 - Parallel)...")
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        local_maps = list(executor.map(run_taint_pre_pass_single, files))
     
-    # 2. Local pattern scan & AI Stack Detection
-    console.print("⏳ Performing initial pattern scanning...")
+    global GLOBAL_PROPAGATION_MAP
+    GLOBAL_PROPAGATION_MAP.clear()
+    GLOBAL_PROPAGATION_MAP.update(merge_propagation_maps(local_maps))
+    
+    if GLOBAL_PROPAGATION_MAP:
+        console.print(f"🔗 Identified {len(GLOBAL_PROPAGATION_MAP)} potential cross-function propagators.")
+
+    # 3. Local pattern scan (Pass 2 - Parallel)
+    console.print("⏳ Performing deep pattern scanning (Pass 2 - Parallel)...")
     hotspots = []
     detected_frameworks = set()
     
-    for file_path in files:
-        lines = read_file_content(file_path)
-        if lines:
-            # Detect AI stack
-            stack = detect_ai_stack(lines)
-            detected_frameworks.update(stack)
-            
-            # Detect hotspots
-            file_hotspots = scan_file(file_path, lines, base_path=repo_path)
-            hotspots.extend(file_hotspots)
+    # [Critical Fix]: Pass the propagation map to each worker process
+    # so inter-procedural taint tracking is available in Pass 2.
+    serializable_map = {k: {'tainted_indices': list(v['tainted_indices'])} for k, v in GLOBAL_PROPAGATION_MAP.items()}
+    file_args = [(f, repo_path, serializable_map) for f in files]
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        results = list(executor.map(process_file_patterns, file_args))
+    
+    for h_list, f_set in results:
+        hotspots.extend(h_list)
+        detected_frameworks.update(f_set)
     
     # Report AI Stack
     ai_stack = sorted(list(detected_frameworks))
     if ai_stack:
         report_ai_stack(ai_stack)
     
+    all_findings = []
+
     if not hotspots:
         console.print("[green]✅ No suspicious patterns found during initial scan.[/green]")
         return all_findings
 
-    # 3. LLM analysis
+    # 4. AI Analysis (Batching Mode)
     total_hotspots = len(hotspots)
     if limit and total_hotspots > limit:
         console.print(f"🔥 Found {total_hotspots} potential hotspots. [bold yellow]Limiting AI analysis to the first {limit} targets...[/bold yellow]")
         analysis_targets = hotspots[:limit]
     else:
-        console.print(f"🔥 Found {total_hotspots} potential hotspots. Analyzing with AI...")
+        console.print(f"🔥 Found {total_hotspots} potential hotspots. Analyzing with AI (Batched)...")
         analysis_targets = hotspots
 
-    from concurrent.futures import ThreadPoolExecutor
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+    
+    # Group findings by file for efficient batching context
+    by_file = {}
+    for h in analysis_targets:
+        if h.file_path not in by_file: by_file[h.file_path] = []
+        by_file[h.file_path].append(h)
 
-    all_findings = []
+    # Convert to flat list of batches (max 5 per batch)
+    batches = []
+    for file_path, items in by_file.items():
+        for i in range(0, len(items), 5):
+            batches.append(items[i:i+5])
+
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
     
     with Progress(
         SpinnerColumn(),
@@ -83,35 +131,53 @@ def run_scan(repo_path, json_output=None, markdown_output=None, limit=None):
         TaskProgressColumn(),
         console=console
     ) as progress:
-        task = progress.add_task("[yellow]AI Reasoning about vulnerabilities...", total=len(analysis_targets))
+        task = progress.add_task("[yellow]AI Reasoning (Batch Mode)...", total=len(batches))
         
-        def process_hotspot(hotspot):
+        def process_batch(batch):
             try:
-                result = analyze_vulnerability(hotspot)
+                # If only one item, use the smarter Agent loop
+                if len(batch) == 1:
+                    result = analyze_vulnerability(batch[0])
+                    results = [result]
+                else:
+                    # If multiple, use the faster batch mode
+                    results = analyze_vulnerabilities_batch(batch)
+                
                 progress.advance(task)
-                return result, hotspot
+                return results, batch
             except Exception as e:
                 progress.advance(task)
-                return {"error": str(e)}, hotspot
+                return [{"error": str(e)} for _ in batch], batch
 
-        # Use a reasonable concurrency limit to avoid massive rate limits or thread bloat
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_results = list(executor.map(process_hotspot, analysis_targets))
+        # I/O bound calls to OpenAI — ThreadPool is fine here
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            batch_results = list(executor.map(process_batch, batches))
 
-        for result, hotspot in future_results:
-            if result.get("vulnerability_found"):
-                # Apply deterministic metadata if available
-                metadata = VULN_METADATA.get(hotspot.pattern_type, {})
+        for results, batch in batch_results:
+            # Handle results being a single dict if LLM ignored array instruction for N=1
+            if isinstance(results, dict) and not isinstance(results, list):
+                results = [results]
                 
-                result["file"] = hotspot.file_path
-                result["line"] = hotspot.line_number
-                result["severity"] = metadata.get("base_severity", result.get("severity", "High"))
-                result["owasp_category"] = metadata.get("owasp", "N/A")
-                result["cwe"] = metadata.get("cwe", "N/A")
+            for i, result in enumerate(results):
+                if i >= len(batch): break # Guard
                 
-                all_findings.append(result)
-            elif "error" in result:
-                console.print(f"[red]AI Error scanning {hotspot.file_path}: {result['error']}[/red]")
+                if not isinstance(result, dict):
+                    continue
+                    
+                if result.get("vulnerability_found"):
+                    hotspot = batch[i]
+                    # Apply deterministic metadata
+                    metadata = VULN_METADATA.get(hotspot.pattern_type, {})
+                    
+                    result["file"] = hotspot.file_path
+                    result["line"] = hotspot.line_number
+                    result["severity"] = metadata.get("base_severity", result.get("severity", "High"))
+                    result["owasp_category"] = metadata.get("owasp", "N/A")
+                    result["cwe"] = metadata.get("cwe", "N/A")
+                    
+                    all_findings.append(result)
+                elif "error" in result:
+                    console.print(f"[red]Batch Error: {result['error']}[/red]")
 
     # 4. Reporting
     report_findings_cli(all_findings)
@@ -183,5 +249,4 @@ def main():
             console.print(f"\n[bold green]✅ Scan passed: No vulnerabilities found at or above {args.fail_on} severity.[/bold green]")
 
 if __name__ == "__main__":
-    import sys
     main()

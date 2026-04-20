@@ -33,13 +33,35 @@ UNTRUSTED_SOURCES = {
     'request.getParameter', 'System.getenv', 'r.URL.Query', 'os.Getenv'
 }
 
-# Identifier fragments used by TreeSitter scanner to assign High confidence
-# (when any tainted variable name contains one of these keywords it's likely user input)
+# Identifier fragments used to assign High confidence.
+# These are matched as WHOLE WORDS (not substrings) to avoid false positives
+# from names like 'metadata', 'target', 'environment_config', etc.
+import re as _re
 UNTRUSTED_VAR_HINTS = {
     'user', 'input', 'request', 'req', 'query', 'param', 'body', 'form',
-    'arg', 'argv', 'env', 'environ', 'data', 'payload', 'cmd', 'command',
+    'argv', 'environ', 'payload', 'cmd', 'command',
     'raw', 'unsafe', 'unvalidated', 'untrusted', 'external', 'remote',
+    'user_input', 'user_data', 'raw_data', 'form_data', 'request_data',
 }
+# Pre-compiled regex for splitting identifiers into semantic segments  
+# Splits on: underscores, dots, and camelCase boundaries
+_SEGMENT_SPLITTER = _re.compile(r'[_.]|(?<=[a-z])(?=[A-Z])')
+
+def _matches_hint(name: str) -> bool:
+    """Check if a variable/path name matches an untrusted hint.
+    
+    Splits names into segments by '_', '.', and camelCase boundaries,
+    then checks for exact segment matches against the hints set.
+    
+    Examples:
+        'user_input'          → ['user', 'input']         → MATCH (both are hints)
+        'metadata'            → ['metadata']               → NO MATCH
+        'environment_config'  → ['environment', 'config']  → NO MATCH
+        'os.environ'          → ['os', 'environ']          → MATCH ('environ')
+        'requestCount'        → ['request', 'Count']       → MATCH ('request')
+    """
+    segments = _SEGMENT_SPLITTER.split(name)
+    return any(seg.lower() in UNTRUSTED_VAR_HINTS for seg in segments if seg)
 
 # Qualified sink definitions: maps method names to the caller objects that make them dangerous
 # Format: 'method_name': { 'risk_type': str, 'dangerous_callers': set | None }
@@ -61,6 +83,11 @@ SCOPED_SINKS = {
     'exec':         {'risk_type': 'Unsafe Eval', 'dangerous_callers': None},
 }
 
+# Global state for Inter-Procedural Propagation
+# Maps function name to details about which arguments are tainted by entrypoints
+# Format: { 'function_name': { 'tainted_indices': set() } }
+GLOBAL_PROPAGATION_MAP = {}
+
 @dataclass
 class TaintFlow:
     sink_node: any # ast.AST or tree_sitter.Node
@@ -68,20 +95,19 @@ class TaintFlow:
     code_slice: List[str]
     sink_type: str
     lineno: int
-    sink_type: str
-    lineno: int
     function_name: str = "global"
     vulnerable_syntax: str = ""
     confidence: str = "Low"
 
 class ASTScanner(ast.NodeVisitor):
-    def __init__(self, source_code: str):
+    def __init__(self, source_code: str, propagation_map: Optional[Dict] = None):
         self.source_lines = source_code.splitlines()
         self.tainted_vars = set()
         self.explicit_sources = set()  # High confidence tainted vars
         self.findings: List[TaintFlow] = []
         self.current_func = "global"
         self.imported_modules = set()  # Track imports for scope awareness
+        self.propagation_map = propagation_map or GLOBAL_PROPAGATION_MAP
         self._detect_imports(source_code)
 
     def _detect_imports(self, source_code: str):
@@ -168,10 +194,15 @@ class ASTScanner(ast.NodeVisitor):
         # Entry points: Function arguments are considered tainted. 
         # For World-Class precision, we mark them High Confidence if they match 
         # known framework-style 'untrusted' signatures.
-        for arg in node.args.args:
+        for i, arg in enumerate(node.args.args):
             self.tainted_vars.add(arg.arg)
+            
+            # [World-Class]: Check if this function was identified as a propagator in the Pre-Pass
+            prop_info = self.propagation_map.get(node.name)
+            is_global_propagator = prop_info and i in prop_info.get('tainted_indices', set())
+            
             # Conventional handler signatures: request, req, payload, data
-            if arg.arg.lower() in {'request', 'req', 'request_data', 'request_params', 'payload', 'user_input'}:
+            if arg.arg.lower() in {'request', 'req', 'request_data', 'request_params', 'payload', 'user_input'} or is_global_propagator:
                 self.explicit_sources.add(arg.arg)
         
         # Visit children
@@ -193,50 +224,96 @@ class ASTScanner(ast.NodeVisitor):
             func_name = node.func.attr
         return func_name.lower() in SANITIZER_FUNCTIONS
 
-    def visit_Assign(self, node: ast.Assign):
-        """Track data flow through assignments with sanitizer awareness.
+    def _get_root_name(self, node) -> Optional[str]:
+        """Resolves the root variable name for Name, Attribute, and Subscript nodes."""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            return self._get_root_name(node.value)
+        elif isinstance(node, ast.Subscript):
+            return self._get_root_name(node.value)
+        return None
+
+    def _get_full_path(self, node) -> Optional[str]:
+        """Resolves full attribute path like os.environ.get"""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            base = self._get_full_path(node.value)
+            return f"{base}.{node.attr}" if base else node.attr
+        return None
+
+    def _is_untrusted_node(self, node) -> bool:
+        """Checks if a node is an untrusted source based on path or word-boundary name hints."""
+        path = self._get_full_path(node)
+        if path:
+            if path in UNTRUSTED_SOURCES: return True
+            # Use word-boundary matching to avoid 'metadata' matching 'data', etc.
+            if _matches_hint(path): return True
         
-        If the RHS is a call to a known sanitizer function (e.g., escape(), sanitize()),
-        the taint chain is BROKEN — the assigned variable is considered clean.
-        """
-        # Check if RHS is a direct sanitizer call: safe_val = sanitize(user_input)
-        if isinstance(node.value, ast.Call) and self._is_sanitizer_call(node.value):
-            # Sanitizer detected — do NOT propagate taint. 
-            # Also remove previously tainted vars if they are being reassigned.
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    self.tainted_vars.discard(target.id)
-                    self.explicit_sources.discard(target.id)
-            self.generic_visit(node)
+        if isinstance(node, ast.Call):
+            return self._is_untrusted_node(node.func)
+        return False
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        """Handle annotated assignments: val: str = untrusted"""
+        if node.value:
+            self._process_assignment([node.target], node.value)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node: ast.AugAssign):
+        """Handle augmented assignments: query += untrusted"""
+        # In augmented assignment, the target is ALSO an input to the RHS operation
+        self._process_assignment([node.target], node.value, is_augmented=True)
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign):
+        """Track data flow through assignments with Flow-Sensitive logic."""
+        self._process_assignment(node.targets, node.value)
+        self.generic_visit(node)
+
+    def _process_assignment(self, targets: List[ast.AST], value: ast.AST, is_augmented: bool = False):
+        """Core logic for taint propagation and flow-sensitive removal."""
+        # 1. Sanitizer Check (Breaks the chain)
+        if isinstance(value, ast.Call) and self._is_sanitizer_call(value):
+            for target in targets:
+                root = self._get_root_name(target)
+                if root:
+                    self.tainted_vars.discard(root)
+                    self.explicit_sources.discard(root)
             return
 
         is_rh_tainted = False
         is_explicit_source = False
         
-        for sub_node in ast.walk(node.value):
-            if isinstance(sub_node, ast.Name):
-                if sub_node.id in self.tainted_vars:
-                    is_rh_tainted = True
-                if sub_node.id in self.explicit_sources or sub_node.id in UNTRUSTED_SOURCES:
-                    is_rh_tainted = True
-                    is_explicit_source = True
-            elif isinstance(sub_node, ast.Attribute):
-                attr_name = f"{sub_node.value.id}.{sub_node.attr}" if isinstance(sub_node.value, ast.Name) else sub_node.attr
-                if attr_name in UNTRUSTED_SOURCES:
-                    is_rh_tainted = True
-                    is_explicit_source = True
-            elif isinstance(sub_node, ast.Call) and isinstance(sub_node.func, ast.Name) and sub_node.func.id in UNTRUSTED_SOURCES:
+        # 2. Extract Taint from RHS
+        for sub_node in ast.walk(value):
+            if self._is_untrusted_node(sub_node):
                 is_rh_tainted = True
                 is_explicit_source = True
-        
-        if is_rh_tainted:
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    self.tainted_vars.add(target.id)
-                    if is_explicit_source:
-                        self.explicit_sources.add(target.id)
-        
-        self.generic_visit(node)
+                break
+            
+            # Check for existing taint propagation
+            root = self._get_root_name(sub_node)
+            if root and root in self.tainted_vars:
+                is_rh_tainted = True
+                if root in self.explicit_sources:
+                    is_explicit_source = True
+
+        # 3. Apply/Remove Taint on LHS
+        for target in targets:
+            root = self._get_root_name(target)
+            if not root: continue
+
+            if is_rh_tainted:
+                self.tainted_vars.add(root)
+                if is_explicit_source:
+                    self.explicit_sources.add(root)
+            elif not is_augmented:
+                # [Flow-Sensitive]: If not an augmented assignment and RHS is safe, 
+                # the target is now clean (Literal Overwrite).
+                self.tainted_vars.discard(root)
+                self.explicit_sources.discard(root)
 
     def visit_Call(self, node: ast.Call):
         """Detect when tainted data reaches a sink with precision logic."""
@@ -259,9 +336,20 @@ class ASTScanner(ast.NodeVisitor):
                     # If shell=False (default) and first arg is a list OR uses *args, it's relatively safe
                     if not is_shell:
                         if node.args and isinstance(node.args[0], (ast.List, ast.Starred)):
-                            # This is the "Safe List Execution" pattern requested by the user
-                            self.generic_visit(node)
-                            return
+                            # [Fix Point 3]: "Safe List Execution" Logic Hardening
+                            # Rule: subprocess.run(["command", tainted_arg]) is SAFE.
+                            # Rule: subprocess.run([tainted_cmd, "--arg"]) is DANGEROUS.
+                            # We must verify the first element is a static string constant.
+                            safe_cmd = False
+                            if isinstance(node.args[0], ast.List) and node.args[0].elts:
+                                first_item = node.args[0].elts[0]
+                                if isinstance(first_item, ast.Constant) and isinstance(first_item.value, str):
+                                    # It's a static literal command, e.g., ["git", ...]
+                                    safe_cmd = True
+                            
+                            if safe_cmd:
+                                self.generic_visit(node)
+                                return
 
             # 2. General Taint Analysis
             tainted_args = []
@@ -297,15 +385,162 @@ class ASTScanner(ast.NodeVisitor):
         
         self.generic_visit(node)
 
-def analyze_python_taint(file_path: str, code: str) -> List[TaintFlow]:
-    """Helper to run the AST scanner on a file."""
+def analyze_python_taint(file_path: str, code: str, propagation_map: Optional[Dict] = None) -> List[TaintFlow]:
+    """Analyze a single Python file using AST for vulnerability patterns."""
     try:
+        scanner = ASTScanner(code, propagation_map)
         tree = ast.parse(code)
-        scanner = ASTScanner(code)
         scanner.visit(tree)
         return scanner.findings
-    except SyntaxError:
+    except (SyntaxError, ValueError):
         return []
+
+class CallGraphScanner(ast.NodeVisitor):
+    """Pass 1 Scanner: Records function calls that receive tainted data.
+    
+    This is used to build the Inter-Procedural Propagation Map.
+    Uses flow-sensitive logic (matching the main ASTScanner) to avoid
+    over-approximating taint when variables are overwritten with safe values.
+    """
+    def __init__(self, source_code: str):
+        self.tainted_vars = set()
+        self.current_func = "global"
+        self.propagation_map = {}
+        # Seed with initial sources
+        for src in UNTRUSTED_SOURCES:
+            self.tainted_vars.add(src)
+
+    def _get_root_name(self, node) -> Optional[str]:
+        """Resolves the root variable name for Name, Attribute, and Subscript nodes."""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            return self._get_root_name(node.value)
+        elif isinstance(node, ast.Subscript):
+            return self._get_root_name(node.value)
+        return None
+
+    def _get_full_path(self, node) -> Optional[str]:
+        """Resolves full attribute path like os.environ.get"""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            base = self._get_full_path(node.value)
+            return f"{base}.{node.attr}" if base else node.attr
+        return None
+
+    def _is_rhs_tainted(self, value_node) -> bool:
+        """Check if a RHS expression contains tainted data."""
+        for sub_node in ast.walk(value_node):
+            # Check full attribute paths against UNTRUSTED_SOURCES
+            path = self._get_full_path(sub_node)
+            if path and (path in UNTRUSTED_SOURCES or _matches_hint(path)):
+                return True
+            # Check if it's a call to an untrusted source
+            if isinstance(sub_node, ast.Call):
+                func_path = self._get_full_path(sub_node.func)
+                if func_path and (func_path in UNTRUSTED_SOURCES or _matches_hint(func_path)):
+                    return True
+            # Check existing taint propagation
+            root = self._get_root_name(sub_node)
+            if root and root in self.tainted_vars:
+                return True
+        return False
+
+    def _is_safe_literal(self, node) -> bool:
+        """Check if a node is a safe literal (string, number, bool, None, list/dict of literals)."""
+        if isinstance(node, ast.Constant):
+            return True
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            return all(self._is_safe_literal(elt) for elt in node.elts)
+        if isinstance(node, ast.Dict):
+            return all(self._is_safe_literal(v) for v in node.values if v)
+        return False
+
+    def visit_Assign(self, node: ast.Assign):
+        """Flow-sensitive assignment tracking for the pre-pass."""
+        # Check if RHS is a sanitizer call — breaks the taint chain
+        if isinstance(node.value, ast.Call):
+            func_name = ""
+            if isinstance(node.value.func, ast.Name):
+                func_name = node.value.func.id
+            elif isinstance(node.value.func, ast.Attribute):
+                func_name = node.value.func.attr
+            if func_name.lower() in SANITIZER_FUNCTIONS:
+                for target in node.targets:
+                    root = self._get_root_name(target)
+                    if root:
+                        self.tainted_vars.discard(root)
+                self.generic_visit(node)
+                return
+
+        is_tainted = self._is_rhs_tainted(node.value)
+
+        for target in node.targets:
+            root = self._get_root_name(target)
+            if not root:
+                continue
+            if is_tainted:
+                self.tainted_vars.add(root)
+            elif self._is_safe_literal(node.value):
+                # [Flow-Sensitive]: Literal overwrite removes taint
+                self.tainted_vars.discard(root)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node: ast.AugAssign):
+        """Handle augmented assignments: query += untrusted"""
+        if self._is_rhs_tainted(node.value):
+            root = self._get_root_name(node.target)
+            if root:
+                self.tainted_vars.add(root)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call):
+        """Check if this is a custom function call passing tainted data."""
+        func_name = ""
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            func_name = node.func.attr
+        
+        if func_name and func_name not in SCOPED_SINKS and func_name not in SANITIZER_FUNCTIONS:
+            # Check arguments
+            for i, arg in enumerate(node.args):
+                for sub_node in ast.walk(arg):
+                    root = self._get_root_name(sub_node)
+                    if root and root in self.tainted_vars:
+                        if func_name not in self.propagation_map:
+                            self.propagation_map[func_name] = {'tainted_indices': set()}
+                        self.propagation_map[func_name]['tainted_indices'].add(i)
+                        break  # One tainted reference per arg is enough
+        
+        self.generic_visit(node)
+
+def run_taint_pre_pass_single(file_path: str) -> Dict:
+    """Pass 1 for a single file. Returns a local propagation map."""
+    local_map = {}
+    if file_path.endswith('.py'):
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                code = f.read()
+            tree = ast.parse(code)
+            # We pass a local_map to the scanner
+            scanner = CallGraphScanner(code)
+            scanner.propagation_map = local_map
+            scanner.visit(tree)
+        except:
+            pass
+    return local_map
+
+def merge_propagation_maps(maps: List[Dict]) -> Dict:
+    """Combines multiple propagation maps into one."""
+    merged = {}
+    for m in maps:
+        for func_name, info in m.items():
+            if func_name not in merged:
+                merged[func_name] = {'tainted_indices': set()}
+            merged[func_name]['tainted_indices'].update(info['tainted_indices'])
+    return merged
 
 class TreeSitterScanner:
     """Universal scanner for JS/TS using Tree-Sitter."""
@@ -400,6 +635,20 @@ class TreeSitterScanner:
                     return cat
         return None
 
+    def _get_ts_root_name(self, node) -> Optional[str]:
+        """Resolves the root identifier for complex Tree-Sitter nodes (member/subscript access)."""
+        if node.type == 'identifier':
+            return node.text.decode('utf-8')
+        
+        # JS/TS: member_expression, subscript_expression
+        # Java: field_access, array_access
+        # Go: selector_expression, index_expression
+        if node.type in ('member_expression', 'subscript_expression', 'field_access', 'array_access', 'selector_expression', 'index_expression'):
+            obj = node.child_by_field_name('object') or node.child_by_field_name('operand') or node.child_by_field_name('value')
+            if obj:
+                return self._get_ts_root_name(obj)
+        return None
+
     def trace_node(self, node):
         """Recursively traverse Tree-Sitter nodes to find taint and sinks."""
         
@@ -423,7 +672,7 @@ class TreeSitterScanner:
                         var_name = curr.text.decode('utf-8')
                         self.tainted_vars.add(var_name)
                         # Heuristic: if param name hints at untrusted input, mark as explicit source
-                        if any(hint in var_name.lower() for hint in UNTRUSTED_VAR_HINTS):
+                        if _matches_hint(var_name):
                             self.explicit_sources.add(var_name)
                     stack.extend(curr.children)
             
@@ -439,25 +688,46 @@ class TreeSitterScanner:
         # 2. Detect Taint Propagation (Assignments)
         if node.type in self.assign_types:
             left = node.child_by_field_name('left') or node.child_by_field_name('name')
+            right = node.child_by_field_name('right') or node.child_by_field_name('value')
+            
             if not left and node.type in ('assignment_statement', 'short_var_declaration'):
                 children = node.children
                 if len(children) >= 3:
                     left = children[0]
                     right = children[2]
-            else:
-                right = node.child_by_field_name('right') or node.child_by_field_name('value')
             
             if left and right:
                 is_tainted = False
                 is_explicit = False
                 is_sanitizer = False
                 
-                # Check RHS for explicit untrusted sources
-                rhs_text = right.text.decode('utf-8')
-                if any(src in rhs_text for src in UNTRUSTED_SOURCES) or \
-                   any(hint in rhs_text.lower() for hint in UNTRUSTED_VAR_HINTS):
-                    is_tainted = True
-                    is_explicit = True
+                # Check RHS identifiers for explicit untrusted sources
+                # Walk the actual AST nodes instead of raw text substring matching
+                # to avoid false positives from names like 'metadata', 'requestCount'
+                rhs_ids = []
+                id_stack = [right]
+                while id_stack:
+                    id_node = id_stack.pop()
+                    if id_node.type == 'identifier':
+                        rhs_ids.append(id_node.text.decode('utf-8'))
+                    elif id_node.type in ('member_expression', 'field_access', 'selector_expression'):
+                        # Build dotted path: req.body, process.env
+                        full_text = id_node.text.decode('utf-8')
+                        if full_text in UNTRUSTED_SOURCES:
+                            is_tainted = True
+                            is_explicit = True
+                    id_stack.extend(id_node.children)
+                
+                if not is_tainted:
+                    for rid in rhs_ids:
+                        if rid in UNTRUSTED_SOURCES:
+                            is_tainted = True
+                            is_explicit = True
+                            break
+                        if _matches_hint(rid):
+                            is_tainted = True
+                            is_explicit = True
+                            break
 
                 # Check if RHS is a sanitizer call
                 if right.type in ('call_expression', 'method_invocation'):
@@ -472,39 +742,37 @@ class TreeSitterScanner:
                         if fname.lower() in SANITIZER_FUNCTIONS:
                             is_sanitizer = True
                 
-                if is_sanitizer:
-                    stack = [left]
-                    while stack:
-                        curr = stack.pop()
-                        if curr.type == 'identifier':
-                            var_name = curr.text.decode('utf-8')
-                            self.tainted_vars.discard(var_name)
-                            self.explicit_sources.discard(var_name)
-                        stack.extend(curr.children)
-                else:
-                    stack = [right]
-                    while stack:
-                        curr = stack.pop()
-                        if curr.type == 'identifier' and curr.text.decode('utf-8') in self.tainted_vars:
-                            is_tainted = True
-                            if curr.text.decode('utf-8') in self.explicit_sources:
-                                is_explicit = True
-                        if curr.type == 'call_expression':
-                            fn = curr.child_by_field_name('function')
-                            if fn and b'Sprintf' in fn.text:
-                                is_tainted = True
-                        stack.extend(curr.children)
-                    
-                    if is_tainted:
-                        stack = [left]
+                # 3. Apply/Remove Taint
+                root_var = self._get_ts_root_name(left)
+                if root_var:
+                    if is_sanitizer:
+                        self.tainted_vars.discard(root_var)
+                        self.explicit_sources.discard(root_var)
+                    else:
+                        # Check if any part of RHS is tainted
+                        stack = [right]
                         while stack:
                             curr = stack.pop()
                             if curr.type == 'identifier':
-                                var_name = curr.text.decode('utf-8')
-                                self.tainted_vars.add(var_name)
-                                if is_explicit:
-                                    self.explicit_sources.add(var_name)
+                                name = curr.text.decode('utf-8')
+                                if name in self.tainted_vars:
+                                    is_tainted = True
+                                    if name in self.explicit_sources:
+                                        is_explicit = True
+                            if curr.type == 'call_expression':
+                                fn = curr.child_by_field_name('function')
+                                if fn and b'Sprintf' in fn.text:
+                                    is_tainted = True
                             stack.extend(curr.children)
+                        
+                        if is_tainted:
+                            self.tainted_vars.add(root_var)
+                            if is_explicit:
+                                self.explicit_sources.add(root_var)
+                        elif not node.type == 'augmented_assignment': # Basic check for augmented in TS
+                            # [Flow-Sensitive Discard]: RHS is safe, variable is now clean
+                            self.tainted_vars.discard(root_var)
+                            self.explicit_sources.discard(root_var)
 
         # 3. Detect Sinks (Calls & Constructor Creation)
         call_types = ('call_expression', 'method_invocation', 'object_creation_expression')
@@ -546,11 +814,9 @@ class TreeSitterScanner:
 
                             # Assign confidence: High if any tainted var name hints at user input
                             # OR if the variable was marked as an explicit source (e.g. process.env)
-                            var_names_lower = {v.lower() for v in tainted_found}
                             is_high_conf = any(v in self.explicit_sources for v in tainted_found) or any(
-                                hint in vname
-                                for hint in UNTRUSTED_VAR_HINTS
-                                for vname in var_names_lower
+                                _matches_hint(vname)
+                                for vname in tainted_found
                             )
                             confidence = "High" if is_high_conf else "Low"
 

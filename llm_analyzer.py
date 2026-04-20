@@ -8,6 +8,18 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Models known to support the { "type": "json_object" } response_format.
+# This avoids brittle substring checks like 'gpt-4 in MODEL'.
+_JSON_MODE_MODELS = {'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-1106-preview', 'gpt-3.5-turbo-1106'}
+
+def _supports_json_mode(model_name: str) -> bool:
+    """Check if a model supports OpenAI's structured JSON response mode."""
+    # Exact match first
+    if model_name in _JSON_MODE_MODELS:
+        return True
+    # Prefix match for versioned variants (e.g., gpt-4o-2024-05-13)
+    return any(model_name.startswith(base) for base in _JSON_MODE_MODELS)
+
 SYSTEM_PROMPT = """
 You are RepoGuard, an elite Autonomous Security Auditor. Eliminate false positives by tracing code paths.
 
@@ -17,20 +29,25 @@ YOUR DECISION LOGIC:
 3. ONLY use tools if the vulnerability is AMBIGUOUS because the variable's origin is unclear and comes from another file or a helper function you haven't seen. Tools are expensive — use them sparingly.
 4. If your tool investigation reveals adequate upstream sanitization or that the data is not user-controlled, return {"vulnerability_found": false}.
 
-Respond ONLY with a JSON object in this format when finished:
-{
-    "vulnerability_found": true,
-    "risk_type": "CORE Security Risk" | "AI Security Risk",
-    "vulnerability_name": "Short name",
-    "function_name": "The name of the function containing the finding",
-    "vulnerable_variable": "The name of the tainted variable",
-    "vulnerable_syntax": "The exact line of code causing the risk",
-    "description": "Clear explanation of the finding",
-    "attack_vector": "Step-by-step walkthrough of how to exploit this specific code path",
-    "remediation": "Specific, actionable fix"
-}
+Respond ONLY with a JSON array when multiple findings are provided, or a single JSON object for one finding.
+Format:
+[
+  {
+      "finding_id": "unique_id_from_input",
+      "vulnerability_found": true,
+      "risk_type": "CORE Security Risk" | "AI Security Risk",
+      "vulnerability_name": "Short name",
+      "function_name": "The name of the function",
+      "vulnerable_variable": "The name of the variable",
+      "vulnerable_syntax": "The exact line of code causing the risk",
+      "description": "Clear explanation",
+      "attack_vector": "Step-by-step walkthrough",
+      "remediation": "Specific fix"
+  },
+  ...
+]
 
-If no vulnerability exists (or you found upstream sanitization), return: {"vulnerability_found": false}
+If no vulnerability exists for a specific ID, still include it in the array with: {"finding_id": "...", "vulnerability_found": false}
 """
 
 from agent_tools import AGENT_TOOLS, execute_tool
@@ -126,9 +143,68 @@ Security Category to Evaluate: {snippet_obj.pattern_type}"""
         # Hit max turns — force a final verdict using all accumulated context
         # This prevents false negatives when obvious vulnerabilities are present
         return _force_final_verdict(messages)
+    except Exception as e:
+        return {"vulnerability_found": False, "error": str(e)}
+
+def analyze_vulnerabilities_batch(snippets):
+    """
+    Analyzes multiple hotspots in a single LLM turn to save tokens and time. 
+    Groups them by file context for maximum shared reasoning efficiency.
+    """
+    if not snippets: return []
+    
+    # 1. Prepare batched prompt
+    targets_info = []
+    for i, snip in enumerate(snippets):
+        targets_info.append(f"""
+FINDING ID: {i}
+File: {snip.file_path}
+Line: {snip.line_number}
+Context: {snip.function_name}
+Tainted Vars: {snip.tainted_vars}
+Syntax: {snip.vulnerable_syntax}
+Category: {snip.pattern_type}
+Code snippet:
+{snip.get_full_context()}
+---""")
+
+    batch_prompt = "\n".join(targets_info)
+    prompt = (
+        f"You are evaluating {len(snippets)} potential security hotspots in a batch. "
+        "Analyze each one carefully. If a finding is a false positive, mark it as found: false. "
+        "Respond ONLY with a JSON array containing your verdicts for ALL findings.\n\n"
+        f"BATCH TARGETS:\n{batch_prompt}"
+    )
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            response_format={"type": "json_object"} if _supports_json_mode(MODEL) else None
+        )
+        content = response.choices[0].message.content or "[]"
+        if "```json" in content:
+            content = content.split("```json")[-1].split("```")[0].strip()
+        
+        # Open AI sometimes returns { "findings": [...] } instead of raw array if forced to json_object
+        data = json.loads(content)
+        
+        # Normalize result to a list
+        results_list = []
+        if isinstance(data, dict):
+            if "findings" in data and isinstance(data["findings"], list):
+                results_list = data["findings"]
+            else:
+                results_list = [data]
+        elif isinstance(data, list):
+            results_list = data
+            
+        return results_list
 
     except Exception as e:
-        return {
-            "vulnerability_found": False,
-            "error": str(e)
-        }
+        return [{"vulnerability_found": False, "error": str(e)} for _ in snippets]
