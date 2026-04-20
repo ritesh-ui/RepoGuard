@@ -104,8 +104,8 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
-| **HF SmolAgents** | 3 High Risks (Hardcoded Secrets) | ✅ Audited | [View Report](./reports/benchmarks/RESULTS_SMOLAGENTS.md) |
-| **OpenAI Agents SDK** | 5 Critical Risks (Subprocess Injection) | ✅ Fixed | [View Report](./reports/benchmarks/RESULTS_OPENAI_SDK.md) |
+| **HF SmolAgents** | 3 High Risks (Hardcoded Secrets) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
+| **OpenAI Agents SDK** | 5 Critical Risks (Subprocess Injection) | ✅ Fixed | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
 
 > [!IMPORTANT]
 > **Case Study: Agentic Reasoning**
