@@ -5,6 +5,7 @@ __pycache__/
 # Exclude generated reports and scan output
 *_report.json
 *_report.md
+!INVESTOR_AUDIT_REPORT.md
 regression_report.json
 enterprise_v2.json
 *.json
