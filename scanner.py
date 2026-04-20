@@ -107,6 +107,36 @@ def detect_ai_stack(file_contents):
             detected_frameworks.append(name)
     return detected_frameworks
 
+def _find_nearest_scope(lines, line_idx):
+    """Fallback heuristic: looks backwards to find the nearest class or function definition.
+    Tracks indentation to build a qualified name (e.g., ClassName.method_name).
+    """
+    scopes = []
+    target_indent = 999
+    
+    # Heuristic: only look back up to 200 lines to avoid excessive scanning
+    start_lookback = max(0, line_idx - 200)
+    
+    for i in range(line_idx - 1, start_lookback - 1, -1):
+        line = lines[i]
+        stripped = line.lstrip()
+        # Skip empty lines and comments
+        if not stripped or stripped.startswith(('#', '//', '/*', '*', '"""', "'''")):
+            continue
+        
+        indent = len(line) - len(line.lstrip())
+        if indent < target_indent:
+            # Match common declaration patterns
+            # Python: def, class | JS/TS: function, class | Go/Java: func, class
+            match = re.search(r'\b(def|class|function|func)\s+([a-zA-Z0-9_]+)', stripped)
+            if match:
+                scopes.insert(0, match.group(2))
+                target_indent = indent
+                if indent == 0:
+                    break # Reached top-level module scope
+                
+    return ".".join(scopes) if scopes else "global"
+
 def get_logical_context(lines, target_idx, file_path, min_context=15):
     """
     Dynamically extracts a logical code block for LLM context.
@@ -318,6 +348,9 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
                     # Smart layout boundary extraction
                     context_above, context_below = get_logical_context(lines, i, file_path, context_lines)
                     
+                    # Heuristic scope recovery for regex fallback
+                    func_name = _find_nearest_scope(lines, i)
+
                     detections.append(DetectedSnippet(
                         file_path=file_path,
                         line_number=i + 1,
@@ -325,6 +358,7 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
                         context_above=context_above,
                         context_below=context_below,
                         pattern_type=ptype,
+                        function_name=func_name,
                         base_path=base_path
                     ))
                     break
