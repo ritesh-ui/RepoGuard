@@ -302,8 +302,14 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
             # Skip AI patterns if no AI stack is detected in the file
             if category == 'AI_SPECIFIC' and not has_ai_stack:
                 continue
-
+            
+            # [Fix]: De-prioritize agentic tool triggers in test files to avoid unit-test noise
+            is_test_file = 'tests/' in file_path.lower() or 'test_' in file_path.lower()
+            
             for ptype, pattern in patterns.items():
+                # [Optimization]: Skip noisy tool registration boilerplate in test files
+                if is_test_file and ptype == 'Unsafe Tool/Agent Usage':
+                    continue
                 # If the file was processed by AST, skip core risks already covered
                 if ast_processed and ptype in ('SQL Injection Pattern', 'Command Execution', 'Unsafe Eval/Exec'):
                     continue

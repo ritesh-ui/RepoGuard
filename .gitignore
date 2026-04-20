@@ -26,7 +26,8 @@ VERIFY_REPORT.md
 RESULTS_*.md
 
 # Except benchmark reports
-!reports/benchmarks/
+!reports/
+!reports/**
 
 # Temporary scan directories and files
 temp_dir/
