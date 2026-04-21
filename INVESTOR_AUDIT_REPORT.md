@@ -1,4 +1,4 @@
-# AgentSentry: Technical Architecture & Investor Due Diligence Report
+# RepoInspect: Technical Architecture & Investor Due Diligence Report
 
 **Objective:** To provide a comprehensive overview of the technological framework, proprietary forensic engines, and market validation as we prepare for a $1M Seed investment round.
 

@@ -21,7 +21,7 @@ def _supports_json_mode(model_name: str) -> bool:
     return any(model_name.startswith(base) for base in _JSON_MODE_MODELS)
 
 SYSTEM_PROMPT = """
-You are RepoGuard, an elite Autonomous Security Auditor. Eliminate false positives by tracing code paths.
+You are RepoInspect, an elite Autonomous Security Auditor. Eliminate false positives by tracing code paths.
 
 YOUR DECISION LOGIC:
 1. FIRST, analyze the provided code context carefully.

@@ -20,7 +20,7 @@ def get_repo_files(repo_path):
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         
         for file in files:
-            # Skip RepoGuard's own infrastructure to prevent self-detection noise
+            # Skip RepoInspect's own infrastructure to prevent self-detection noise
             if file in REPOGUARD_CORE_FILES:
                 continue
                 

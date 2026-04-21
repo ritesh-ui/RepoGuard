@@ -196,7 +196,7 @@ def run_scan(repo_path, json_output=None, markdown_output=None, limit=None, max_
     return all_findings
 
 def main():
-    parser = argparse.ArgumentParser(description="RepoGuard: AI-Powered Repository Security Scanner")
+    parser = argparse.ArgumentParser(description="RepoInspect: AI-Powered Repository Security Scanner")
     parser.add_argument("repo_path", help="Path or Git URL of the repository to scan")
     parser.add_argument("--json", help="Output findings to a JSON file", metavar="FILE")
     parser.add_argument("--markdown", help="Output findings to a Markdown file", metavar="FILE")
@@ -213,7 +213,7 @@ def main():
         console.print("\n" + "="*60, style="yellow")
         console.print("⚠️  WARNING: OPENAI_API_KEY NOT FOUND", style="bold yellow")
         console.print("="*60, style="yellow")
-        console.print("RepoGuard's Deep AI Analysis is disabled.")
+        console.print("RepoInspect's Deep AI Analysis is disabled.")
         console.print("To enable full AST-based security auditing and attack vector")
         console.print("analysis, please set your OPENAI_API_KEY in your environment")
         console.print("or as a GitHub Secret.")

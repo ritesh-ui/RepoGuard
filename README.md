@@ -1,8 +1,8 @@
 # 🛡️ RepoInspect: Deterministic AI Security Engine
 
-**The next generation of AppSec.** RepoGuard is a high-performance security engine that eliminates the "False Positive tax" by merging the surgical precision of **Abstract Syntax Trees (AST)** with the deep reasoning of **Autonomous AI Agents**.
+**The next generation of AppSec.** RepoInspect is a high-performance security engine that eliminates the "False Positive tax" by merging the surgical precision of **Abstract Syntax Trees (AST)** with the deep reasoning of **Autonomous AI Agents**.
 
-[![RepoGuard Security Scan](https://github.com/ritesh-ui/RepoGuard/actions/workflows/repoguard.yml/badge.svg)](https://github.com/ritesh-ui/RepoGuard/actions/workflows/repoguard.yml)
+[![RepoInspect Security Scan](https://github.com/ritesh-ui/RepoInspect/actions/workflows/repoinspect.yml/badge.svg)](https://github.com/ritesh-ui/RepoInspect/actions/workflows/repoinspect.yml)
 [![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Performance](https://img.shields.io/badge/Parallel-Scale-green.svg)](#)
 
@@ -10,12 +10,12 @@
 
 ## ⚡ The Deterministic Moat
 
-Legacy SAST tools generate noise. Naive AI scanners are slow and hallucinate. **RepoGuard wins by being Hybrid.**
+Legacy SAST tools generate noise. Naive AI scanners are slow and hallucinate. **RepoInspect wins by being Hybrid.**
 
 1.  **Phase 1: Deterministic Filter (The Scalpel)**
     Our custom Two-Pass engine scans thousands of files in parallel. It doesn't just look for strings; it maps Abstract Syntax Trees to identify structurally valid vulnerability paths.
 2.  **Phase 2: Agentic Forensics (The Brain)**
-    Instead of flagging every "hotspot," RepoGuard launches an **Autonomous Security Agent**. If a finding is ambiguous, the Agent uses dynamic tools (`read_file`, `text_search`) to contextually trace variable origins across file boundaries before rendering a verdict.
+    Instead of flagging every "hotspot," RepoInspect launches an **Autonomous Security Agent**. If a finding is ambiguous, the Agent uses dynamic tools (`read_file`, `text_search`) to contextually trace variable origins across file boundaries before rendering a verdict.
 
 ---
 
@@ -23,7 +23,7 @@ Legacy SAST tools generate noise. Naive AI scanners are slow and hallucinate. **
 
 ### 🔍 Precision Audit Engine
 - **Inter-Procedural Taint Tracking**: A two-pass architecture that builds a global function propagation map. We track user-controlled data even when it's passed through multiple helper functions.
-- **Flow-Sensitive Analysis**: Understands variable overrides. If a tainted variable is reassigned to a safe literal, RepoGuard dynamically clears the risk.
+- **Flow-Sensitive Analysis**: Understands variable overrides. If a tainted variable is reassigned to a safe literal, RepoInspect dynamically clears the risk.
 - **Word-Boundary Intelligence**: Semantic segment-splitting prevents false positives on names like `metadata` or `target`.
 
 ### 🛡️ Enterprise Language Support
@@ -62,7 +62,7 @@ graph TD
 
 1. **Clone and Enter**:
    ```bash
-   git clone https://github.com/ritesh-ui/RepoGuard.git && cd RepoGuard
+   git clone https://github.com/ritesh-ui/RepoInspect.git && cd RepoInspect
    ```
 
 2. **Environment Setup**:
@@ -109,7 +109,7 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 
 > [!IMPORTANT]
 > **Case Study: Agentic Reasoning**
-> In a recent audit of the OpenAI Agents SDK, RepoGuard successfully traced a `subprocess.check_call` vulnerability by identifying that a "safe-looking" package list was actually sourced from external user intent across three nested function calls—a flow that every other modern scanner missed.
+> In a recent audit of the OpenAI Agents SDK, RepoInspect successfully traced a `subprocess.check_call` vulnerability by identifying that a "safe-looking" package list was actually sourced from external user intent across three nested function calls—a flow that every other modern scanner missed.
 
 ---
 

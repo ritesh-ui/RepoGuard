@@ -23,7 +23,7 @@ class DetectedSnippet:
 # Patterns categorized for precision filtering
 PATTERNS = {
     'GENERAL': {
-        # repoguard-ignore-next-line
+        # repoinspect-ignore-next-line
         'Hardcoded Secret': r'(?i)(api[_-]?key|password|secret|token|apikey)\s*=\s*[\'"](?!test|dummy|example|placeholder|your_|my_|fake)[a-zA-Z0-9_\-\.\~]{8,}[\'"]',
         'SQL Injection Pattern': r'(?i)(SELECT|INSERT|UPDATE|DELETE).*\+.*|\b(execute|query)\(.*\+.*',
         'Unsafe Eval/Exec': r'(?i)(eval|exec)\(',
@@ -32,9 +32,9 @@ PATTERNS = {
     'AI_SPECIFIC': {
         # Tightened: only match .format or f-strings if 'prompt' or 'template' is in the line
         'Prompt Injection Risk': r'(?i)(prompt|template).*\.format\(|\.template\s*=|\.render\(|PromptTemplate\(|f[\'"].*(prompt|template).*\{[a-zA-Z_].*\}[\'"]|\{\{.*\}\}',
-        # repoguard-ignore-next-line
+        # repoinspect-ignore-next-line
         'Unsafe Tool/Agent Usage': r'ShellTool|PythonREPL|exec\(',
-        # repoguard-ignore-next-line
+        # repoinspect-ignore-next-line
         'Sensitive Data in Prompt': r'(?i)(prompt|template).*(password|secret|key|token|internal)',
         'Vector DB Risk': r'\.(add|upsert|insert)\(',
     }
@@ -217,7 +217,7 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
                 # [Fix #3]: Check for inline developer ignore directives
                 current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
                 prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
-                if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
+                if 'repoinspect-ignore-next-line' in prev_line_text or 'repoinspect-ignore' in current_line_text:
                     continue
 
                 detections.append(DetectedSnippet(
@@ -251,7 +251,7 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
                 # [Fix #3]: Check for inline developer ignore directives
                 current_line_text = lines[lineno - 1].lower() if lineno > 0 else ""
                 prev_line_text = lines[lineno - 2].lower() if lineno > 1 else ""
-                if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
+                if 'repoinspect-ignore-next-line' in prev_line_text or 'repoinspect-ignore' in current_line_text:
                     continue
 
                 detections.append(DetectedSnippet(
@@ -317,7 +317,7 @@ def scan_file(file_path, lines, base_path="", context_lines=20):
         # [Fix #3]: Check for inline developer ignore directives for Regex
         current_line_text = line.lower()
         prev_line_text = lines[i - 1].lower() if i > 0 else ""
-        if 'repoguard-ignore-next-line' in prev_line_text or 'repoguard-ignore' in current_line_text:
+        if 'repoinspect-ignore-next-line' in prev_line_text or 'repoinspect-ignore' in current_line_text:
             continue
             
         # [Fix #2]: Robust comment stripping to prevent regex from flagging documentation

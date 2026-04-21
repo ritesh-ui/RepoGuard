@@ -1,4 +1,4 @@
-# 🛡️ RepoGuard Security Report
+# 🛡️ RepoInspect Security Report
 
 ### 🤖 AI Stack Detected: `Anthropic, OpenAI`
 

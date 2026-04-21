@@ -1,4 +1,4 @@
-name: RepoGuard Security Scan
+name: RepoInspect Security Scan
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   scan:
-    name: RepoGuard AI Audit
+    name: RepoInspect AI Audit
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,7 @@ jobs:
         pip install -r requirements.txt
         pip list # Debug: Verify dependencies are installed
 
-    - name: Run RepoGuard Scan
+    - name: Run RepoInspect Scan
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: |
@@ -38,5 +38,5 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: repoguard-report
+        name: repoinspect-report
         path: REPO_GUARD_REPORT.md

@@ -29,7 +29,7 @@ def report_findings_cli(findings):
         console.print("[bold green]✅ No vulnerabilities found![/bold green]")
         return
 
-    table = Table(title="RepoGuard Security Findings")
+    table = Table(title="RepoInspect Security Findings")
     table.add_column("File", style="cyan")
     table.add_column("Line", style="magenta")
     table.add_column("Function", style="green")
@@ -90,7 +90,7 @@ def report_findings_markdown(findings, output_file, ai_stack=None):
     """
     try:
         with open(output_file, 'w') as f:
-            f.write("# 🛡️ RepoGuard Security Report\n\n")
+            f.write("# 🛡️ RepoInspect Security Report\n\n")
             
             if ai_stack:
                 stack_str = ", ".join(ai_stack)
