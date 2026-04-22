@@ -6,108 +6,190 @@
 
 | File | Line | Function | Vulnerability | Severity |
 | :--- | :--- | :--- | :--- | :--- |
-| .github/scripts/pr_labels.py | 437 | `main` | Command Injection | **High** |
-| src/agents/extensions/experimental/codex/exec.py | 119 | `CodexExec.run` | Command Injection via subprocess | **Critical** |
-| src/agents/extensions/sandbox/daytona/sandbox.py | 996 | `_run_persist_workspace_command` | Command Injection | **High** |
-| src/agents/extensions/sandbox/daytona/sandbox.py | 1013 | `hydrate_workspace` | Command Injection | **High** |
-| src/agents/extensions/sandbox/modal/sandbox.py | 1020 | `read` | Command Injection | **High** |
+| .codex/hooks/stop_repo_tidy.py | 36 | `run_command` | Command Injection | **High** |
+| src/agents/extensions/memory/async_sqlite_session.py | 163 | `AsyncSQLiteSession.add_items` | SQL Injection | **High** |
+| src/agents/extensions/memory/async_sqlite_session.py | 171 | `AsyncSQLiteSession.add_items` | SQL Injection | **High** |
+| src/agents/extensions/memory/async_sqlite_session.py | 178 | `AsyncSQLiteSession.add_items` | SQL Injection | **High** |
+| src/agents/extensions/sandbox/daytona/sandbox.py | 1024 | `_run_persist_workspace_command` | Command Injection | **High** |
+| src/agents/extensions/sandbox/daytona/sandbox.py | 1041 | `hydrate_workspace` | Command Injection | **High** |
+| src/agents/sandbox/entries/mounts/patterns.py | 442 | `MountpointMountPattern.apply` | Command Injection | **High** |
+| src/agents/sandbox/entries/mounts/patterns.py | 698 | `RcloneMountPattern._start_rclone_server` | Command Injection | **High** |
 
 ---
 
 ## 🔍 Detailed Forensic Analysis
 
-### 📍 Command Injection in `.github/scripts/pr_labels.py`
-- **Line**: 437
-- **Function**: `main`
-- **Variable**: `cmd`
-- **Syntax**: `subprocess.check_call(cmd)`
+### 📍 Command Injection in `.codex/hooks/stop_repo_tidy.py`
+- **Line**: 36
+- **Function**: `run_command`
+- **Variable**: `cwd`
+- **Syntax**: `return subprocess.run(args, cwd=cwd, capture_output=True, check=False, text=True)`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The command constructed for subprocess.check_call can potentially be influenced by unvalidated input, leading to command injection vulnerabilities if user-controlled data is passed without sanitization.
+> **Description**: The 'cwd' parameter is provided by user input and is used as the current working directory in subprocess.run, which could allow command injection if malicious input is passed.
 
 #### 🏹 Attack Vector
-1. The script constructs a command in the list variable 'cmd' based on the PR number and labels. 2. If an attacker can manipulate the PR number or labels, they can inject arbitrary commands into the 'cmd' list. 3. When subprocess.check_call executes, it can run these injected commands in the shell environment, leading to unauthorized command execution.
+An attacker could provide a malicious 'cwd' value that changes the directory to an unexpected location, potentially leading to the execution of commands that should not have been run.
 
 #### 🛠 Remediation
-Ensure that any data used in the construction of 'cmd' is validated and sanitized. Ideally, utilize a more controlled interface for command execution or ensure that all components of the command come from a trusted source.
+Implement validation to ensure 'cwd' only accepts allowed directory paths. Use absolute paths if possible and sanitize the input.
 
 ---
 
-### 📍 Command Injection via subprocess in `src/agents/extensions/experimental/codex/exec.py`
-- **Line**: 119
-- **Function**: `CodexExec.run`
-- **Variable**: `args.approval_policy, args.thread_id, args.images`
-- **Syntax**: `command_args.extend(["--config", f'approval_policy="{args.approval_policy}"'])`
-- **OWASP Category**: LLM08:2023-Excessive Agency
-- **CWE Indicator**: CWE-250
-- **Severity**: Critical
+### 📍 SQL Injection in `src/agents/extensions/memory/async_sqlite_session.py`
+- **Line**: 163
+- **Function**: `AsyncSQLiteSession.add_items`
+- **Variable**: `self.sessions_table`
+- **Syntax**: `await conn.execute(
+f"""
+INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
+""",
+                (self.session_id,)
+            )`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
 
-> **Description**: The code constructs command-line arguments for a subprocess using potentially user-controlled input. If 'args.approval_policy', 'args.thread_id', or 'args.images' contains malicious input, it could lead to command injection vulnerabilities.
+> **Description**: The sessions_table variable is derived from the class instance and is used directly in f-string interpolation for SQL execution, making it susceptible to SQL injection if controlled by user input.
 
 #### 🏹 Attack Vector
-1. An attacker supplies a malicious input for 'approval_policy'. 2. This input is directly interpolated into the command-line arguments without sanitization. 3. The constructed command is executed, potentially allowing the attacker to execute arbitrary commands.
+1. User controls input to the sessions_table through class instance or related methods.
+2. The f-string incorporates this variable into a query, allowing for potential manipulation of the SQL command.
+3. An attacker could enter SQL commands as part of the table name, leading to unauthorized access or data corruption.
 
 #### 🛠 Remediation
-Validate and sanitize all user inputs before including them in command-line arguments. Use a library that safely constructs command-line commands, such as shlex.quote in Python, to ensure that inputs are safely escaped.
+Ensure that sessions_table is sanitized and validated before use in SQL statements. Replace f-string interpolation with parameterization.
+
+---
+
+### 📍 SQL Injection in `src/agents/extensions/memory/async_sqlite_session.py`
+- **Line**: 171
+- **Function**: `AsyncSQLiteSession.add_items`
+- **Variable**: `self.sessions_table`
+- **Syntax**: `await conn.executemany(
+f"""
+INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
+""",
+                message_data,
+            )`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: Similar to the first finding, the messages_table variable is used in an f-string interpolation, potentially exposing the application to SQL injection vulnerabilities.
+
+#### 🏹 Attack Vector
+1. If user input influences messages_table, an attacker may inject SQL through the table variable.
+2. The f-string executes a SQL command that directly incorporates the unsafe variable, making it vulnerable to manipulation.
+3. This could lead to data loss, exposure, or integrity issues.
+
+#### 🛠 Remediation
+Sanitize inputs to messages_table to prevent injection. Use parameterized queries instead of f-string interpolation.
+
+---
+
+### 📍 SQL Injection in `src/agents/extensions/memory/async_sqlite_session.py`
+- **Line**: 178
+- **Function**: `AsyncSQLiteSession.add_items`
+- **Variable**: `self.sessions_table`
+- **Syntax**: `await conn.execute(
+f"""
+UPDATE {self.sessions_table}
+---`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The sessions_table variable is again used in an f-string to form an SQL command, which can lead to SQL injection if user-controlled.
+
+#### 🏹 Attack Vector
+1. User input could influence the value of sessions_table indirectly.
+2. By including this in an f-string for query execution, it creates an opportunity for SQL injection.
+3. Malicious users could alter the SQL command structure, posing a significant risk to data integrity and security.
+
+#### 🛠 Remediation
+Ensure proper validation and sanitation of the sessions_table variable. Use parameterized queries instead of f-string interpolations to prevent injection.
 
 ---
 
 ### 📍 Command Injection in `src/agents/extensions/sandbox/daytona/sandbox.py`
-- **Line**: 996
+- **Line**: 1024
 - **Function**: `_run_persist_workspace_command`
 - **Variable**: `tar_cmd`
-- **Syntax**: `await self._sandbox.process.exec(tar_cmd, env=envs or None)`
+- **Syntax**: `result = await self._sandbox.process.exec(
+f"tar -C {shlex.quote(root.as_posix())} -xf {shlex.quote(tar_path)}",`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The tar_cmd variable is used directly in a command execution context without visible input validation or sanitization, posing a command injection risk.
+> **Description**: The use of string interpolation with user-controlled input in tar_cmd could lead to command injection if not properly sanitized.
 
 #### 🏹 Attack Vector
-An attacker could manipulate tar_cmd to include arbitrary commands, which would be executed in the shell, leading to potential compromise of the system running the code.
+If tar_cmd is user-controlled and contains malicious input, it could allow an attacker to run arbitrary commands.
 
 #### 🛠 Remediation
-Implement strict input validation and sanitization for tar_cmd, ensuring only expected and safe commands are allowed.
+Ensure tar_cmd is validated and sanitized before passing it to the exec method.
 
 ---
 
 ### 📍 Command Injection in `src/agents/extensions/sandbox/daytona/sandbox.py`
-- **Line**: 1013
+- **Line**: 1041
 - **Function**: `hydrate_workspace`
 - **Variable**: `tar_path`
-- **Syntax**: `await self._sandbox.process.exec(f"rm -f -- {shlex.quote(tar_path)}", env=envs or None)`
+- **Syntax**: `await self._sandbox.process.exec(
+f"rm -f -- {shlex.quote(tar_path)}",
+`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The tar_path variable is used in a command execution context directly with string interpolation, which can lead to command injection if the tar_path input is not properly validated.
+> **Description**: The use of string interpolation with user-controlled input in tar_path could lead to command injection if not properly sanitized.
 
 #### 🏹 Attack Vector
-An attacker could manipulate tar_path to execute commands on the host system when rm -f is called.
+If tar_path is manipulated by an attacker, it could enable execution of unwanted commands (like `rm -rf /` for example).
 
 #### 🛠 Remediation
-Ensure tar_path is validated and sanitized to prevent unintended command execution. Consider using safe functions for file operations instead of invoking shell commands.
+Properly validate tar_path and avoid direct interpolation into command strings.
 
 ---
 
-### 📍 Command Injection in `src/agents/extensions/sandbox/modal/sandbox.py`
-- **Line**: 1020
-- **Function**: `read`
-- **Variable**: `cmd`
-- **Syntax**: `out = await self.exec(*cmd, shell=False)`
+### 📍 Command Injection in `src/agents/sandbox/entries/mounts/patterns.py`
+- **Line**: 442
+- **Function**: `MountpointMountPattern.apply`
+- **Variable**: `joined_cmd`
+- **Syntax**: `result = await session.exec("sh", "-lc", joined_cmd, shell=False)`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The 'cmd' variable is constructed using user-controlled inputs and is passed to an execution function. This poses a risk of command injection if an attacker can influence the contents of 'workspace_path'.
+> **Description**: The command being executed is constructed from user input without adequate sanitization.
 
 #### 🏹 Attack Vector
-1. User provides input that is used to build the 'workspace_path'. 2. If the input is not properly sanitized, it may allow the user to inject malicious commands. 3. When 'exec' runs the command, it executes the injected command instead of just the intended 'cat' command.
+An attacker could manipulate the `cmd` input to inject malicious commands through `joined_cmd`. This command is then executed in a shell context without proper validation, allowing possible code execution attacks.
 
 #### 🛠 Remediation
-Ensure that 'workspace_path' is properly sanitized before being used to construct the 'cmd' array. Utilize a whitelist approach for valid paths and avoid allowing user input directly in command construction.
+Ensure that `cmd` is constructed safely using parameterization or ensure full sanitization before passing to `exec`.
+
+---
+
+### 📍 Command Injection in `src/agents/sandbox/entries/mounts/patterns.py`
+- **Line**: 698
+- **Function**: `RcloneMountPattern._start_rclone_server`
+- **Variable**: `server_cmd`
+- **Syntax**: `result = await session.exec("sh", "-lc", server_cmd, shell=False)`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The server command allows user-controlled input, making it vulnerable to command injection attacks.
+
+#### 🏹 Attack Vector
+By manipulating the command passed through `self.extra_args` or directly in `cmd`, an attacker could execute arbitrary commands.
+
+#### 🛠 Remediation
+Ensure all variables that contribute to `server_cmd` are sanitized and validated to avoid injection risks.
 
 ---
 

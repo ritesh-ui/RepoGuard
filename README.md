@@ -16,8 +16,10 @@ Legacy SAST tools generate noise. Naive AI scanners are slow and hallucinate. **
 
 1.  **Phase 1: Deterministic Filter (The Scalpel)**
     Our custom Two-Pass engine scans thousands of files in parallel. It doesn't just look for strings; it maps Abstract Syntax Trees to identify structurally valid vulnerability paths.
-2.  **Phase 2: Agentic Forensics (The Brain)**
-    Instead of flagging every "hotspot," RepoInspect launches an **Autonomous Security Agent**. If a finding is ambiguous, the Agent uses dynamic tools (`read_file`, `text_search`) to contextually trace variable origins across file boundaries before rendering a verdict.
+2.  **Phase 2: AST-Aware GraphRAG Indexing (The Library)**
+    To guarantee zero missed context, RepoInspect chunks your repository strictly by semantic boundaries (functions, classes) and indexes them into a local Vector DB. 
+3.  **Phase 3: Agentic Forensics (The Brain)**
+    Instead of flagging every "hotspot," RepoInspect launches an **Autonomous Security Agent**. If a finding is ambiguous, the Agent queries the GraphRAG index via `semantic_search` to retrieve the unbroken, exact source code of external dependencies, eliminating AI hallucinations and "Lost in the Middle" errors.
 
 ---
 
@@ -49,11 +51,12 @@ Specialized detection for vulnerabilities standard scanners miss:
 graph TD
     CLI[scan_repo.py] --> P1[Pass 1: Global Prop Map Builder]
     P1 -->|Parallel Processes| Map[Inter-Procedural Taint Map]
-    Map --> P2[Pass 2: Deep Pattern Scanner]
+    Map --> RAG[Pass 2.5: AST-Aware GraphRAG Indexer]
+    RAG -->|Semantic Embeddings| ChromaDB[(Local Vector DB)]
+    RAG --> P2[Pass 3: Deep Pattern Scanner]
     P2 -->|Hotspots| Agent[Autonomous Forensic Agent]
-    Agent -->|Tool Use: read_file| Root[Variable Root Tracing]
-    Agent -->|Tool Use: text_search| Cross[Cross-File Validation]
-    Root --> Logic[Deterministic Logic Check]
+    Agent -->|Tool Use: semantic_search| ChromaDB
+    Agent -->|Cross-File Validation| Logic[Deterministic Logic Check]
     Logic --> Result[Verified Vulnerability]
     Result --> Report[MD/JSON/CLI Reports]
 ```
@@ -106,11 +109,11 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
-| **OpenAI Agents SDK** | 1 Critical, 4 High Risks | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
-| **Mem0 (AI Memory)** | 15 High Risks (SQL/Prompt Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
+| **OpenAI Agents SDK** | 7 High Risks (Command & SQL Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
+| **Mem0 (AI Memory)** | 16 High Risks (SQL/Prompt Injection/Hardcoded Secrets) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
 | **Firecrawl (Scraping)** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_FIRECRAWL.md) |
 | **Dify (LLM Platform)** | Analyzing (8,900+ files)... | ⏳ In Progress | [Pending...] |
-| **HF SmolAgents** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
+| **HF SmolAgents** | 1 High Risk (Sensitive Data Exposure LLM06:2023) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
 
 > [!IMPORTANT]
 > **Case Study: Forensic Taint Tracking**
