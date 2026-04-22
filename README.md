@@ -107,7 +107,7 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
 | **OpenAI Agents SDK** | 1 Critical, 4 High Risks | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
-| **Mem0 (AI Memory)** | 21 High Risks (SQL/Command Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
+| **Mem0 (AI Memory)** | 20 High Risks (SQL/Command Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
 | **Firecrawl (Scraping)** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_FIRECRAWL.md) |
 | **Dify (LLM Platform)** | Analyzing (8,900+ files)... | ⏳ In Progress | [Pending...] |
 | **HF SmolAgents** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
