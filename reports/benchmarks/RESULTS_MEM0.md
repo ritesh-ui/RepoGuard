@@ -7,21 +7,28 @@
 | File | Line | Function | Vulnerability | Severity |
 | :--- | :--- | :--- | :--- | :--- |
 | openclaw/telemetry.ts | 16 | `global` | Hardcoded Secret | **High** |
-| mem0-ts/src/client/telemetry.ts | 15 | `global` | Hardcoded Secret | **High** |
-| cli/node/src/telemetry.ts | 18 | `global` | Hardcoded Secret | **High** |
+| cli/node/src/telemetry.ts | 18 | `global` | Hardcoded API Key | **High** |
 | embedchain/embedchain/telemetry/posthog.py | 14 | `__init__` | Hardcoded Secret | **High** |
-| evaluation/src/openai/predict.py | 94 | `answer_question` | Prompt Injection Risk | **High** |
+| evaluation/metrics/llm_judge.py | 46 | `evaluate_llm_judge` | Prompt Injection through User Inputs | **High** |
+| evaluation/src/langmem.py | 26 | `get_answer` | Prompt Injection Risk | **High** |
+| evaluation/src/rag.py | 36 | `generate_response` | Prompt Injection | **High** |
+| evaluation/src/openai/predict.py | 94 | `answer_question` | Prompt Injection | **High** |
 | mem0/reranker/llm_reranker.py | 123 | `rerank` | Prompt Injection | **High** |
-| mem0/vector_stores/cassandra.py | 170 | `CassandraDB.create_col` | SQL Injection | **High** |
-| mem0/vector_stores/cassandra.py | 238 | `CassandraDB.search` | SQL Injection | **High** |
+| mem0/vector_stores/cassandra.py | 332 | `CassandraDB.update` | SQL Injection | **High** |
+| mem0/vector_stores/cassandra.py | 356 | `CassandraDB.get` | SQL Injection | **High** |
 | mem0/vector_stores/cassandra.py | 448 | `CassandraDB.list` | SQL Injection | **High** |
-| mem0/vector_stores/azure_mysql.py | 182 | `create_col` | SQL Injection | **High** |
-| mem0/vector_stores/azure_mysql.py | 196 | `create_col` | SQL Injection | **High** |
+| mem0/vector_stores/cassandra.py | 482 | `CassandraDB.reset` | SQL Injection | **High** |
+| mem0/vector_stores/azure_mysql.py | 182 | `create_col` | SQL Injection through Unsafe Interpolation | **High** |
+| mem0/vector_stores/azure_mysql.py | 196 | `create_col` | SQL Injection through Unsafe Interpolation | **High** |
+| mem0/vector_stores/azure_mysql.py | 294 | `search` | SQL Injection through Unsafe Interpolation | **High** |
+| mem0/vector_stores/azure_mysql.py | 358 | `keyword_search` | SQL Injection through Unsafe Interpolation | **High** |
+| mem0/vector_stores/pgvector.py | 154 | `create_col` | SQL Injection | **High** |
 | mem0/vector_stores/pgvector.py | 167 | `create_col` | SQL Injection | **High** |
 | mem0/vector_stores/pgvector.py | 175 | `create_col` | SQL Injection | **High** |
 | mem0/vector_stores/pgvector.py | 182 | `create_col` | SQL Injection | **High** |
+| mem0/vector_stores/pgvector.py | 305 | `delete` | SQL Injection | **High** |
 | mem0/vector_stores/pgvector.py | 434 | `PGVector.list` | SQL Injection | **High** |
-| mem0/memory/telemetry.py | 15 | `global` | Hardcoded Secret | **High** |
+| mem0/memory/telemetry.py | 15 | `global` | Hardcoded API Key | **High** |
 
 ---
 
@@ -36,36 +43,17 @@
 - **CWE Indicator**: CWE-798
 - **Severity**: High
 
-> **Description**: The PostHog API key is hardcoded in the source code, exposing it to unauthorized access.
+> **Description**: The POSTHOG_API_KEY is hardcoded, exposing it in the source code, which could lead to unauthorized access if the code is made public.
 
 #### 🏹 Attack Vector
-An attacker who gains access to the source code or an unprotected binary can extract the PostHog API key and make unauthorized requests on behalf of the application, potentially compromising the analytics data and the integrity of the application.
+An attacker could gain access to the API key directly from the source code, allowing them to send false telemetry data or misuse PostHog services.
 
 #### 🛠 Remediation
-Replace the hardcoded API key with an environment variable or secure configuration management system to manage sensitive keys.
+Store sensitive keys like POSTHOG_API_KEY in environment variables or a secure secrets manager instead of hardcoding them.
 
 ---
 
-### 📍 Hardcoded Secret in `mem0-ts/src/client/telemetry.ts`
-- **Line**: 15
-- **Function**: `global`
-- **Variable**: `POSTHOG_API_KEY`
-- **Syntax**: `const POSTHOG_API_KEY = "phc_hgJkUVJFYtmaJqrvf6CYN67TIQ8yhXAkWzUn9AMU4yX";`
-- **OWASP Category**: A07:2021-Identification and Authentication Failures
-- **CWE Indicator**: CWE-798
-- **Severity**: High
-
-> **Description**: The POSTHOG_API_KEY is hardcoded directly in the source code, which can expose it to unauthorized users and lead to potential misuse.
-
-#### 🏹 Attack Vector
-An attacker gaining access to the source code or a compiled version could see the hardcoded API key and use it for malicious activities such as accessing analytics data or impersonating users.
-
-#### 🛠 Remediation
-Move the API key to an environment variable or a secure vault service to prevent exposure. Ensure that these secrets are not embedded directly in the codebase.
-
----
-
-### 📍 Hardcoded Secret in `cli/node/src/telemetry.ts`
+### 📍 Hardcoded API Key in `cli/node/src/telemetry.ts`
 - **Line**: 18
 - **Function**: `global`
 - **Variable**: `POSTHOG_API_KEY`
@@ -74,13 +62,13 @@ Move the API key to an environment variable or a secure vault service to prevent
 - **CWE Indicator**: CWE-798
 - **Severity**: High
 
-> **Description**: The API key for PostHog telemetry is hardcoded, which exposes it to potential unauthorized access if the code is leaked or published.
+> **Description**: The API key for PostHog is hardcoded in the source code, which may expose it to unauthorized access if the source code is shared or accessed by unintended parties.
 
 #### 🏹 Attack Vector
-1. An attacker finds the source code containing the hardcoded API key. 2. The attacker uses the key to access the PostHog API without authorization. 3. Sensitive usage data can be monitored or manipulated by the attacker.
+An attacker gaining access to the source code can extract the PostHog API Key, allowing them to send fraudulent telemetry data or access sensitive information related to analytics.
 
 #### 🛠 Remediation
-Store the API key in environment variables or a secure vault and access it in the code, instead of hardcoding it.
+Replace the hardcoded API key with an environment variable or a secure secrets management solution to prevent exposure.
 
 ---
 
@@ -93,17 +81,74 @@ Store the API key in environment variables or a secure vault and access it in th
 - **CWE Indicator**: CWE-798
 - **Severity**: High
 
-> **Description**: The API key for Posthog is hardcoded into the source code, which poses a risk if the source code is exposed as it could allow unauthorized access to the Posthog service.
+> **Description**: A hardcoded API key is present in the constructor, which poses a security risk if this code is exposed in a public repository or disclosed inadvertently.
 
 #### 🏹 Attack Vector
-An attacker could gain access to the source code, either through a repository leak or a compromised server, and use the hardcoded API key to send false telemetry data or access sensitive user information.
+An attacker who gains access to the source code could extract the hardcoded API key and misuse it for unauthorized access to the Posthog service or any visible user data.
 
 #### 🛠 Remediation
-Store the API key in an environment variable or a secure secret management system, and retrieve it in the code using a safe method to avoid hardcoding sensitive information.
+Replace the hardcoded API key with a configuration management solution, such as environment variables or a secure vault, to retrieve sensitive values.
 
 ---
 
-### 📍 Prompt Injection Risk in `evaluation/src/openai/predict.py`
+### 📍 Prompt Injection through User Inputs in `evaluation/metrics/llm_judge.py`
+- **Line**: 46
+- **Function**: `evaluate_llm_judge`
+- **Variable**: `question, gold_answer, generated_answer`
+- **Syntax**: `content: ACCURACY_PROMPT.format(question=question, gold_answer=gold_answer, generated_answer=generated_answer)`
+- **OWASP Category**: LLM01:2023-Prompt Injection
+- **CWE Indicator**: CWE-116
+- **Severity**: High
+
+> **Description**: User controlled inputs (question, gold_answer, generated_answer) are directly formatted into a prompt, leading to potential prompt injection risks.
+
+#### 🏹 Attack Vector
+An attacker can manipulate the input parameters (question, gold_answer, generated_answer) to modify the prompt, leading the model to produce unintended or harmful outputs.
+
+#### 🛠 Remediation
+Sanitize and validate user inputs before including them in the prompt. Use predefined templates or strict validation rules.
+
+---
+
+### 📍 Prompt Injection Risk in `evaluation/src/langmem.py`
+- **Line**: 26
+- **Function**: `get_answer`
+- **Variable**: `prompt`
+- **Syntax**: `prompt = ANSWER_PROMPT_TEMPLATE.render(...)`
+- **OWASP Category**: LLM01:2023-Prompt Injection
+- **CWE Indicator**: CWE-116
+- **Severity**: High
+
+> **Description**: The variable 'prompt' is constructed using user-controlled input without proper sanitization, which can lead to prompt injection vulnerabilities.
+
+#### 🏹 Attack Vector
+An attacker can manipulate the 'question' or other user inputs to alter the prompt sent to the AI model, potentially creating harmful outputs.
+
+#### 🛠 Remediation
+Sanitize the inputs before utilizing them in the prompt template. Implement validation checks on 'question' and other user inputs.
+
+---
+
+### 📍 Prompt Injection in `evaluation/src/rag.py`
+- **Line**: 36
+- **Function**: `generate_response`
+- **Variable**: `prompt`
+- **Syntax**: `prompt = template.render(CONTEXT=context, QUESTION=question)`
+- **OWASP Category**: LLM01:2023-Prompt Injection
+- **CWE Indicator**: CWE-116
+- **Severity**: High
+
+> **Description**: The 'prompt' variable is constructed using user-supplied data (question and context), making it susceptible to prompt injection attacks.
+
+#### 🏹 Attack Vector
+An attacker could manipulate the 'question' or 'context' input to inject malicious content that alters the response generated by the AI system, leading to unintended outputs.
+
+#### 🛠 Remediation
+Implement strict input validation and sanitization for the 'question' and 'context' variables to mitigate prompt injection risks.
+
+---
+
+### 📍 Prompt Injection in `evaluation/src/openai/predict.py`
 - **Line**: 94
 - **Function**: `answer_question`
 - **Variable**: `question`
@@ -112,13 +157,13 @@ Store the API key in an environment variable or a secure secret management syste
 - **CWE Indicator**: CWE-116
 - **Severity**: High
 
-> **Description**: The function constructs a prompt using user input, which can allow for prompt injection attacks if the input is not properly sanitized.
+> **Description**: The variable 'question' is likely user-controlled and can be manipulated to inject harmful content into the prompt sent to the OpenAI API, potentially leading to unintended responses.
 
 #### 🏹 Attack Vector
-1. An attacker crafts a question that includes specific instructions or prompts intended to manipulate the model's output. 2. This input is rendered directly into a prompt template without any sanitization. 3. The model generates a response based on the manipulated prompt, which could lead to unintended behaviors or disclosure of sensitive information.
+1. User provides a crafted input as the 'question'. 2. The input is passed to the 'render' method of the Template without any sanitization. 3. The malicious prompt is then sent to the OpenAI API, which processes it and generates a response based on the injected content.
 
 #### 🛠 Remediation
-Ensure that user inputs are validated and sanitized before rendering them into prompts, or consider using a more controlled formatting method that limits the influence of user input.
+Sanitize the input 'question' by implementing a validation or escaping mechanism before rendering it in the template.
 
 ---
 
@@ -131,51 +176,53 @@ Ensure that user inputs are validated and sanitized before rendering them into p
 - **CWE Indicator**: CWE-116
 - **Severity**: High
 
-> **Description**: The 'prompt' variable is constructed using the 'scoring_prompt' which incorporates user-controlled input (the 'query' and the 'doc_text'). If 'scoring_prompt' is not properly sanitized, this can lead to prompt injection vulnerabilities.
+> **Description**: The variable 'prompt' is susceptible to prompt injection attacks because it is constructed using the content from user-provided documents (doc_text). If the content from these documents can be manipulated by an attacker, it could result in malicious inputs being sent to the language model.
 
 #### 🏹 Attack Vector
-An attacker can manipulate the input in 'query' or the text content of documents to craft a malicious input that alters the behavior of the LLM in unintended ways when the prompt is executed.
+1. An attacker provides a malicious document input that alters the intended prompt when formatted.
+2. The generated prompt is sent to the language model, potentially causing the model to produce undesired or harmful outputs based on the injected content.
+3. The attacker's influence on the model's behavior is achieved through carefully crafted content in the documents.
 
 #### 🛠 Remediation
-Ensure that the 'scoring_prompt' is sanitized and properly validated to strip out any potentially malicious input before it's used to format the prompt.
+Implement strict validation and sanitization of document content to eliminate any potential for harmful inputs. Additionally, consider using a predefined set of prompts that do not directly include user-controlled inputs.
 
 ---
 
 ### 📍 SQL Injection in `mem0/vector_stores/cassandra.py`
-- **Line**: 170
-- **Function**: `CassandraDB.create_col`
-- **Variable**: `table_name`
-- **Syntax**: `CREATE TABLE IF NOT EXISTS {self.keyspace}.{table_name} ...`
+- **Line**: 332
+- **Function**: `CassandraDB.update`
+- **Variable**: `query`
+- **Syntax**: `self.session.execute(prepared, (json.dumps(payload), vector_id))`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The table_name variable is directly interpolated into the query, allowing SQL injection attacks.
+> **Description**: The payload variable is being directly used in a query with string interpolation, which can be manipulated for SQL injection.
 
 #### 🏹 Attack Vector
-An attacker could manipulate the table_name value to execute arbitrary SQL commands.
+An attacker could inject malicious SQL through the payload variable which could lead to unauthorized access or data modification.
 
 #### 🛠 Remediation
-Use parameterized queries or validate table_name to only allow predefined values.
+Use parameterized queries to ensure user input is treated as data, not executable code.
 
 ---
 
 ### 📍 SQL Injection in `mem0/vector_stores/cassandra.py`
-- **Line**: 238
-- **Function**: `CassandraDB.search`
-- **Variable**: `self.collection_name`
-- **Syntax**: `SELECT id, vector, payload FROM {self.keyspace}.{self.collection_name}`
+- **Line**: 356
+- **Function**: `CassandraDB.get`
+- **Variable**: `query`
+- **Syntax**: `row = self.session.execute(prepared, (vector_id,)).one()`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The collection_name variable is interpolated into the query, which could lead to SQL injection vulnerabilities.
+> **Description**: The vector_id is used directly in the query via prepared statements, which can be vulnerable if there's unsafe interpolation involved.
 
 #### 🏹 Attack Vector
-An attacker could control the collection_name variable to manipulate the query's behavior.
+An attacker can potentially manipulate the vector_id variable to retrieve unauthorized data or execute other unsafe queries.
 
 #### 🛠 Remediation
-Validate collection_name against a list of allowed values or use parameterized queries.
+Ensure that the vector_id can only be set to valid and expected values or use stricter validation before executing.
 
 ---
 
@@ -183,56 +230,141 @@ Validate collection_name against a list of allowed values or use parameterized q
 - **Line**: 448
 - **Function**: `CassandraDB.list`
 - **Variable**: `query`
+- **Syntax**: `rows = self.session.execute(query)`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The query variable, which is crafted dynamically and may contain user-controlled input, is susceptible to SQL injection.
+
+#### 🏹 Attack Vector
+An attacker could alter the SQL command through the top_k variable to manipulate the outcome of the query.
+
+#### 🛠 Remediation
+Use safely parameterized queries instead of direct interpolation for the SQL statement.
+
+---
+
+### 📍 SQL Injection in `mem0/vector_stores/cassandra.py`
+- **Line**: 482
+- **Function**: `CassandraDB.reset`
+- **Variable**: `query`
 - **Syntax**: `self.session.execute(query)`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The dynamic SQL query uses string interpolation with unsafe data, allowing for possible SQL injection.
+> **Description**: The TRUNCATE query is being dynamically constructed and can pose a risk if the keyspace or collection_name variables are influenced by user input.
 
 #### 🏹 Attack Vector
-1. An attacker manipulates the 'top_k' variable. 2. Upon executing the query, arbitrary SQL commands may be injected.
+An attacker can potentially manipulate the table name through any possible injection in keyspace or collection_name, affecting which table is truncated.
 
 #### 🛠 Remediation
-Use parameterized queries to safely incorporate variables instead of string interpolation.
+Ensure that no user-controlled inputs influence the command, or validate them thoroughly.
 
 ---
 
-### 📍 SQL Injection in `mem0/vector_stores/azure_mysql.py`
+### 📍 SQL Injection through Unsafe Interpolation in `mem0/vector_stores/azure_mysql.py`
 - **Line**: 182
 - **Function**: `create_col`
 - **Variable**: `table_name`
-- **Syntax**: `cur.execute(f""")`
+- **Syntax**: `cur.execute(f"""
+                CREATE TABLE IF NOT EXISTS `{table_name}` (
+                    id VARCHAR(255) PRIMARY KEY,
+                ...`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The 'table_name' variable is directly interpolated into the SQL query string, leading to a potential SQL injection vulnerability.
+> **Description**: The table_name variable is interpolated directly into an SQL statement, making it vulnerable to SQL injection if it contains user-controlled input.
 
 #### 🏹 Attack Vector
-An attacker can control the value of 'name' or 'self.collection_name', allowing arbitrary SQL commands to be executed.
+An attacker could provide a malicious table_name that modifies the SQL command to drop a table or select data from a different table.
 
 #### 🛠 Remediation
-Use parameterized queries instead of string interpolation to safeguard against SQL injection.
+Use parameterized queries or validate the table_name to ensure it contains only expected characters and formats.
 
 ---
 
-### 📍 SQL Injection in `mem0/vector_stores/azure_mysql.py`
+### 📍 SQL Injection through Unsafe Interpolation in `mem0/vector_stores/azure_mysql.py`
 - **Line**: 196
 - **Function**: `create_col`
 - **Variable**: `table_name`
-- **Syntax**: `cur.execute(f""")`
+- **Syntax**: `cur.execute(f"""
+                    CREATE FULLTEXT INDEX ft_text_lemmatized
+                    ON `{table_name}` (text_lemmatized)
+                ...`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The 'table_name' variable is directly interpolated into the SQL query string, leading to a potential SQL injection vulnerability.
+> **Description**: The table_name variable is interpolated directly into an SQL statement, making it vulnerable to SQL injection if it contains user-controlled input.
 
 #### 🏹 Attack Vector
-An attacker can control the value of 'name' or 'self.collection_name', allowing arbitrary SQL commands to be executed.
+An attacker could provide a malicious table_name that modifies the SQL command to drop a table or select data from a different table.
 
 #### 🛠 Remediation
-Use parameterized queries instead of string interpolation to safeguard against SQL injection.
+Use parameterized queries or validate the table_name to ensure it contains only expected characters and formats.
+
+---
+
+### 📍 SQL Injection through Unsafe Interpolation in `mem0/vector_stores/azure_mysql.py`
+- **Line**: 294
+- **Function**: `search`
+- **Variable**: `query_sql`
+- **Syntax**: `cur.execute(query_sql, filter_params)`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The query_sql variable is constructed with string interpolation, which could allow for SQL injection if filter_clause or self.collection_name includes unsanitized user input.
+
+#### 🏹 Attack Vector
+An attacker could influence the filter_clause or collection name, leading to unintended SQL execution.
+
+#### 🛠 Remediation
+Use parameterized queries for the SQL command construction to mitigate risks associated with SQL injection.
+
+---
+
+### 📍 SQL Injection through Unsafe Interpolation in `mem0/vector_stores/azure_mysql.py`
+- **Line**: 358
+- **Function**: `keyword_search`
+- **Variable**: `query_sql`
+- **Syntax**: `cur.execute(query_sql, params)`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The query_sql variable is constructed with string interpolation, making it potentially vulnerable to SQL injection attacks via user input.
+
+#### 🏹 Attack Vector
+An attacker could manipulate input to change the SQL logic under certain conditions, leading to unauthorized data access.
+
+#### 🛠 Remediation
+Utilize parameterized queries to eliminate interpolation of variable data directly into the SQL syntax.
+
+---
+
+### 📍 SQL Injection in `mem0/vector_stores/pgvector.py`
+- **Line**: 154
+- **Function**: `create_col`
+- **Variable**: `self.collection_name`
+- **Syntax**: `cur.execute(
+f"""
+CREATE TABLE IF NOT EXISTS {self.collection_name} (
+`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The SQL statement construction incorporates a variable derived from the object state, which could potentially be manipulated to execute arbitrary SQL commands.
+
+#### 🏹 Attack Vector
+An attacker could control the collection_name, allowing for SQL injection through manipulation of the self.collection_name variable.
+
+#### 🛠 Remediation
+Use parameterized queries to execute SQL commands safely, avoiding direct injection of unvalidated variables.
 
 ---
 
@@ -240,18 +372,21 @@ Use parameterized queries instead of string interpolation to safeguard against S
 - **Line**: 167
 - **Function**: `create_col`
 - **Variable**: `self.collection_name`
-- **Syntax**: `cur.execute(f"CREATE INDEX IF NOT EXISTS {self.collection_name}_diskann_idx ...")`
+- **Syntax**: `cur.execute(
+f"""
+CREATE INDEX IF NOT EXISTS {self.collection_name}_diskann_idx
+`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The collection name is interpolated directly into the SQL command without proper sanitization, making it vulnerable to SQL injection.
+> **Description**: The SQL command involves direct interpolation of 'self.collection_name', which represents a potential SQL injection vulnerability if it contains untrusted input.
 
 #### 🏹 Attack Vector
-An attacker could supply a malicious value for 'self.collection_name' that modifies the SQL statement (e.g., 'table_name; DROP TABLE users;').
+If self.collection_name is set to a value controlled by an attacker, it can lead to arbitrary SQL execution.
 
 #### 🛠 Remediation
-Use parameterized queries or ensure that 'self.collection_name' is rigorously sanitized before use.
+Ensure the collection_name is sanitized or use parameterized queries to execute this SQL safely.
 
 ---
 
@@ -259,18 +394,21 @@ Use parameterized queries or ensure that 'self.collection_name' is rigorously sa
 - **Line**: 175
 - **Function**: `create_col`
 - **Variable**: `self.collection_name`
-- **Syntax**: `cur.execute(f"CREATE INDEX IF NOT EXISTS {self.collection_name}_diskann_idx ...")`
+- **Syntax**: `cur.execute(
+f"""
+CREATE INDEX IF NOT EXISTS {self.collection_name}_diskann_idx
+`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The collection name is interpolated into the SQL execution command, allowing potential SQL injection.
+> **Description**: Using 'self.collection_name' in the SQL command without validation may expose the application to SQL injection risks.
 
 #### 🏹 Attack Vector
-An attacker could manipulate 'self.collection_name' to execute arbitrary SQL queries, such as dropping tables.
+An attacker could manipulate self.collection_name to inject malicious SQL code through the index creation statement.
 
 #### 🛠 Remediation
-Implement parameterized queries to prevent SQL injection vulnerabilities.
+Utilize parameterized queries and validate all input to prevent injection vulnerabilities.
 
 ---
 
@@ -278,18 +416,40 @@ Implement parameterized queries to prevent SQL injection vulnerabilities.
 - **Line**: 182
 - **Function**: `create_col`
 - **Variable**: `self.collection_name`
-- **Syntax**: `cur.execute(f"CREATE INDEX IF NOT EXISTS {self.collection_name}_hnsw_idx ...")`
+- **Syntax**: `cur.execute(
+f"""
+CREATE INDEX IF NOT EXISTS {self.collection_name}_hnsw_idx
+`
 - **OWASP Category**: N/A
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: Direct interpolation of 'self.collection_name' into SQL execution commands poses a SQL injection risk.
+> **Description**: Interpolation of the collection_name variable into the SQL execution could allow an attacker to execute arbitrary SQL statements if user input controls this variable.
 
 #### 🏹 Attack Vector
-If an attacker is able to control 'self.collection_name', they could change the intended SQL execution.
+The collection_name could be manipulated by an attacker to create indexes on unintended tables or perform destructive actions.
 
 #### 🛠 Remediation
-Utilize parameterized queries or sanitize the inputs to remove harmful characters or SQL keywords.
+Employ prepared statements to prevent SQL injections by restricting the types of data that can be injected into SQL commands.
+
+---
+
+### 📍 SQL Injection in `mem0/vector_stores/pgvector.py`
+- **Line**: 305
+- **Function**: `delete`
+- **Variable**: `self.collection_name`
+- **Syntax**: `cur.execute(f"DELETE FROM {self.collection_name} WHERE id = %s", (vector_id,))`
+- **OWASP Category**: N/A
+- **CWE Indicator**: N/A
+- **Severity**: High
+
+> **Description**: The variable 'self.collection_name' is interpolated directly into the SQL query string, making it vulnerable to SQL injection if it contains user-controlled input.
+
+#### 🏹 Attack Vector
+An attacker could manipulate 'self.collection_name' to point to a different table, allowing unauthorized access or modifications.
+
+#### 🛠 Remediation
+Replace the string interpolation with a parameterized query for the table name to prevent SQL injection.
 
 ---
 
@@ -302,17 +462,17 @@ Utilize parameterized queries or sanitize the inputs to remove harmful character
 - **CWE Indicator**: N/A
 - **Severity**: High
 
-> **Description**: The SQL query string construction uses f-strings for interpolation, making it vulnerable to SQL injection if any of the variables interpolated into 'query' can be manipulated by user input.
+> **Description**: The constructed SQL query string includes a variable, which can lead to SQL injection if it is manipulated by user input.
 
 #### 🏹 Attack Vector
-If an attacker can control 'filter_clause', they could inject arbitrary SQL into the query, allowing for data breaches or manipulation.
+An attacker can modify the input of 'filter_params' or 'top_k' to inject malicious SQL commands that could manipulate the database.
 
 #### 🛠 Remediation
-Use parameterized queries for all user inputs and avoid direct string interpolation in SQL command construction.
+Use parameterized queries for all portions of the SQL statement, ensuring no user input can directly alter the SQL structure.
 
 ---
 
-### 📍 Hardcoded Secret in `mem0/memory/telemetry.py`
+### 📍 Hardcoded API Key in `mem0/memory/telemetry.py`
 - **Line**: 15
 - **Function**: `global`
 - **Variable**: `PROJECT_API_KEY`
@@ -321,13 +481,13 @@ Use parameterized queries for all user inputs and avoid direct string interpolat
 - **CWE Indicator**: CWE-798
 - **Severity**: High
 
-> **Description**: The API key is hardcoded in the source code, which poses a security risk since it could be exposed in version control or through application logs.
+> **Description**: The PROJECT_API_KEY is hardcoded with a potentially sensitive API key, which can be exposed in version control systems or logs, leading to unauthorized access to services.
 
 #### 🏹 Attack Vector
-1. An attacker gains access to the source code or logs. 2. The hardcoded API key is identified. 3. The attacker can use this key to access the associated services without authorization.
+An attacker gaining access to the source code or logs containing this hardcoded value could use it to impersonate the application and gain unauthorized access to the Posthog service.
 
 #### 🛠 Remediation
-Store the API key in a secure location, such as environment variables or a secrets management tool, and access it programmatically.
+Remove the hardcoded API key and replace it with a secure approach, such as loading it from environment variables or a secure vault.
 
 ---
 

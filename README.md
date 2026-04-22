@@ -109,11 +109,11 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 
 | Project | Findings | Status | Report |
 | :--- | :--- | :--- | :--- |
-| **OpenAI Agents SDK** | 7 High Risks (Command & SQL Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
-| **Mem0 (AI Memory)** | 16 High Risks (SQL/Prompt Injection/Hardcoded Secrets) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
+| **OpenAI Agents SDK** | 10 High Risks (SQL & Command Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
+| **Mem0 (AI Memory)** | 23 High Risks (SQL/Prompt Injection/Hardcoded Secrets) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
 | **Firecrawl (Scraping)** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_FIRECRAWL.md) |
 | **Dify (LLM Platform)** | Analyzing (8,900+ files)... | ⏳ In Progress | [Pending...] |
-| **HF SmolAgents** | 1 High Risk (Sensitive Data Exposure LLM06:2023) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
+| **HF SmolAgents** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
 
 > [!IMPORTANT]
 > **Case Study: Forensic Taint Tracking**
