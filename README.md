@@ -120,5 +120,20 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 
 ---
 
+## 🛡️ Professional Security Audits & Enterprise Support
+
+Building an AI-native application? RepoInspect provides deeper, more precise security intelligence than standard SAST tools by combining AST logic with Agentic LLM reasoning.
+
+If you need a **Deep Forensic Audit** of your repository, I offer professional security services including:
+
+*   **Zero-False-Positive Verification**: Expert manual review of all scanner findings to eliminate noise.
+*   **AI-Native Vulnerability Scans**: Specialized detection for Prompt Injection, Excessive Agency, and Sensitive Data Disclosure (OWASP LLM Top 10).
+*   **Remediation Roadmap**: Actionable guidance and code patches to secure your production infrastructure.
+*   **Compliance Readiness**: Detailed PDF forensic reports for SOC2, ISO 27001, and board-level reviews.
+
+**[👉 Request a Professional Audit](mailto:riteshsingh545@gmail.com?subject=RepoInspect%20Security%20Audit%20Request)** | **[Connect on LinkedIn](https://www.linkedin.com/in/ritesh-singh-6619ab190)**
+
+---
+
 ## 🛡️ License
 Distributed under the GNU Affero General Public License v3.0 (AGPL-3.0). See `LICENSE` for more information.
