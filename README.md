@@ -41,7 +41,10 @@ Deep AST and Tree-Sitter support for:
 Specialized detection for vulnerabilities standard scanners miss:
 - **Prompt Injection**: LLM01:2023 tracing.
 - **Insecure Tool/Agent Usage**: LLM08:2023 Excessive Agency.
+- **Insecure Deserialization**: Detects unsafe `pickle` and `yaml` loading.
+- **XSS in LLM Output**: Detects unvalidated rendering of LLM responses.
 - **Sensitive Information Disclosure in Prompts**: LLM06:2023.
+- **Vector DB Risk**: Specialized SQLi detection for Chroma, Pinecone, and Weaviate.
 
 ---
 
@@ -111,6 +114,7 @@ python3 scan_repo.py https://github.com/org/repo --branch main
 | :--- | :--- | :--- | :--- |
 | **OpenAI Agents SDK** | 10 High Risks (SQL & Command Injection) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_OPENAI_SDK.md) |
 | **Mem0 (AI Memory)** | 23 High Risks (SQL/Prompt Injection/Hardcoded Secrets) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_MEM0.md) |
+| **Dify (LLM Platform)** | 28 High Risks (SQL Injection in Vector DB Adapters) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_DIFY.md) |
 | **Firecrawl (Scraping)** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_FIRECRAWL.md) |
 | **HF SmolAgents** | 0 High Risks (Verified Safe) | ✅ Audited | [View Report](reports/benchmarks/RESULTS_SMOLAGENTS.md) |
 

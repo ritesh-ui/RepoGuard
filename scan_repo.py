@@ -36,21 +36,20 @@ def clone_repo(repo_url, temp_dir, branch=None):
         console.print(f"[red]❌ Error cloning repository:[/red] {e.stderr}")
         return False
 
+def init_worker(prop_map):
+    """Initializer for worker processes to set up global state once."""
+    import ast_engine
+    if prop_map:
+        deserialized_map = {k: {'tainted_indices': set(v['tainted_indices'])} for k, v in prop_map.items()}
+        ast_engine.GLOBAL_PROPAGATION_MAP.clear()
+        ast_engine.GLOBAL_PROPAGATION_MAP.update(deserialized_map)
+
 def process_file_patterns(file_arg):
     """Helper for parallel pattern scanning.
-    Receives (file_path, repo_path, propagation_map) as a single tuple.
-    Injects the propagation map into the scanner module so inter-procedural
-    taint tracking works correctly in child processes.
+    Receives (file_path, repo_path) as a single tuple.
+    Uses the global propagation map initialized in the worker.
     """
-    file_path, repo_path, prop_map = file_arg
-    
-    # [Critical Fix]: Inject the propagation map into the ast_engine module
-    # inside this child process so that analyze_python_taint() can use it.
-    # We convert tainted_indices back from list to set (serialized for pickling).
-    import ast_engine
-    deserialized_map = {k: {'tainted_indices': set(v['tainted_indices'])} for k, v in prop_map.items()}
-    ast_engine.GLOBAL_PROPAGATION_MAP.clear()
-    ast_engine.GLOBAL_PROPAGATION_MAP.update(deserialized_map)
+    file_path, repo_path = file_arg
     
     lines = read_file_content(file_path)
     if not lines: return [], set()
@@ -86,11 +85,12 @@ def run_scan(repo_path, json_output=None, markdown_output=None, limit=None, max_
     hotspots = []
     detected_frameworks = set()
     
-    # [Critical Fix]: Pass the propagation map to each worker process
-    # so inter-procedural taint tracking is available in Pass 2.
+    # [Performance Boost]: Pass the propagation map ONCE via initializer
+    # to avoid 9,000+ redundant pickling/unpickling operations.
     serializable_map = {k: {'tainted_indices': list(v['tainted_indices'])} for k, v in GLOBAL_PROPAGATION_MAP.items()}
-    file_args = [(f, repo_path, serializable_map) for f in files]
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    file_args = [(f, repo_path) for f in files]
+    
+    with ProcessPoolExecutor(max_workers=max_workers, initializer=init_worker, initargs=(serializable_map,)) as executor:
         results = list(executor.map(process_file_patterns, file_args))
     
     for h_list, f_set in results:

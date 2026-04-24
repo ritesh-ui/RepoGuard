@@ -28,6 +28,7 @@ PATTERNS = {
         'SQL Injection Pattern': r'(?i)(SELECT|INSERT|UPDATE|DELETE).*\+.*|\b(execute|query)\(.*\+.*',
         'Unsafe Eval/Exec': r'(?i)(eval|exec)\(',
         'Command Execution': r'(?i)(os\.(system|popen)|subprocess\.(run|call|Popen|check_output|check_call)\()',
+        'Insecure Deserialization': r'(?i)(pickle\.(load|loads)|yaml\.(load|unsafe_load)|jsonpickle\.decode)\(',
     },
     'AI_SPECIFIC': {
         # Tightened: only match .format or f-strings if 'prompt' or 'template' is in the line
@@ -37,6 +38,7 @@ PATTERNS = {
         # repoinspect-ignore-next-line
         'Sensitive Data in Prompt': r'(?i)(prompt|template).*(password|secret|key|token|internal)',
         'Vector DB Risk': r'\.(add|upsert|insert)\(',
+        'XSS in LLM Output': r'(?i)(dangerouslySetInnerHTML|innerHTML)\s*=\s*',
     }
 }
 
@@ -92,6 +94,16 @@ VULN_METADATA = {
         'owasp': 'A03:2021-Injection',
         'cwe': 'CWE-89',
         'base_severity': 'Medium'
+    },
+    'Insecure Deserialization': {
+        'owasp': 'A08:2021-Software and Data Integrity Failures',
+        'cwe': 'CWE-502',
+        'base_severity': 'Critical'
+    },
+    'XSS in LLM Output': {
+        'owasp': 'A03:2021-Injection',
+        'cwe': 'CWE-79',
+        'base_severity': 'High'
     }
 }
 

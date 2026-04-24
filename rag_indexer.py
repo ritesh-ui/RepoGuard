@@ -165,20 +165,30 @@ class RAGIndexer:
                 embedding_function=openai_ef
             )
 
-        console.print("[bold yellow]⏳ Building AST-Aware GraphRAG Vector Index...[/bold yellow]")
+        console.print(f"[bold yellow]⏳ Building AST-Aware GraphRAG Vector Index for {len(files)} files...[/bold yellow]")
 
         all_chunks = []
-        for file_path in files:
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    code = f.read()
-                rel_path = os.path.relpath(file_path, self.base_path)
-                chunker = SemanticChunker(rel_path, code)
-                all_chunks.extend(chunker.extract_chunks())
-            except Exception:
-                pass
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            chunk_task = progress.add_task("[green]Parsing and Chunking files...", total=len(files))
+            for file_path in files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        code = f.read()
+                    rel_path = os.path.relpath(file_path, self.base_path)
+                    chunker = SemanticChunker(rel_path, code)
+                    all_chunks.extend(chunker.extract_chunks())
+                except Exception:
+                    pass
+                progress.advance(chunk_task)
 
         if not all_chunks:
+            console.print("[yellow]No semantic chunks found to index.[/yellow]")
             return
 
         ids = [c["id"] for c in all_chunks]
@@ -223,6 +233,7 @@ class RAGIndexer:
 
         # Persist fingerprint so next scan can use the cache
         self._save_fingerprint(current_fingerprint)
+        console.print(f"[bold green]✅ AST-Aware GraphRAG: Successfully indexed {len(ids)} semantic blocks.[/bold green]")
 
     def semantic_search(self, query: str, n_results: int = 3) -> str:
         if not self.enabled:

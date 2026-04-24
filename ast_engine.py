@@ -81,6 +81,10 @@ SCOPED_SINKS = {
     # Unsafe Eval — always dangerous regardless of caller
     'eval':         {'risk_type': 'Unsafe Eval', 'dangerous_callers': None},
     'exec':         {'risk_type': 'Unsafe Eval', 'dangerous_callers': None},
+    # Insecure Deserialization sinks
+    'load':         {'risk_type': 'Insecure Deserialization', 'dangerous_callers': {'pickle', 'yaml', 'jsonpickle'}},
+    'loads':        {'risk_type': 'Insecure Deserialization', 'dangerous_callers': {'pickle', 'jsonpickle'}},
+    'unsafe_load':  {'risk_type': 'Insecure Deserialization', 'dangerous_callers': {'yaml'}},
 }
 
 # Global state for Inter-Procedural Propagation
