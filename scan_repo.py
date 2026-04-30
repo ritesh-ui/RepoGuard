@@ -177,7 +177,11 @@ def run_scan(repo_path, json_output=None, markdown_output=None, limit=None, max_
                     # Apply deterministic metadata
                     metadata = VULN_METADATA.get(hotspot.pattern_type, {})
                     
-                    result["file"] = os.path.relpath(hotspot.file_path, repo_path)
+                    # Smart Pathing: Calculate path relative to CWD for better workspace context
+                    try:
+                        result["file"] = os.path.relpath(hotspot.file_path, os.getcwd())
+                    except ValueError:
+                        result["file"] = os.path.relpath(hotspot.file_path, repo_path)
                     result["line"] = hotspot.line_number
                     # Favor AST-detected qualified function name if AI result is generic
                     ai_func = str(result.get("function_name", "")).lower()
