@@ -216,12 +216,41 @@ def main():
     parser.add_argument("--fail-on", help="Fail with exit code 1 if vulnerabilities of this severity or higher are found", 
                         choices=["Low", "Medium", "High", "Critical"], metavar="SEVERITY")
     parser.add_argument("--limit", type=int, help="Limit the number of AI-analyzed hotspots (useful for large repos)")
+    parser.add_argument("--ollama", action="store_true", help="Use local Ollama instance (localhost:11434)")
+    parser.add_argument("--lmstudio", action="store_true", help="Use local LM Studio instance (localhost:1234)")
+    parser.add_argument("--local-model", help="Specify local model name (e.g. llama3)")
     args = parser.parse_args()
 
     repo_path = args.repo_path
     
-    # Graceful check for API Key
-    if not os.getenv("OPENAI_API_KEY"):
+    # Local Provider Setup
+    if args.ollama:
+        os.environ["REPOINSPECT_LOCAL_PROVIDER"] = "ollama"
+        if args.local_model: os.environ["LOCAL_MODEL"] = args.local_model
+    elif args.lmstudio:
+        os.environ["REPOINSPECT_LOCAL_PROVIDER"] = "lmstudio"
+        if args.local_model: os.environ["LOCAL_MODEL"] = args.local_model
+
+    # Pre-flight health check for local providers
+    local_provider = os.environ.get("REPOINSPECT_LOCAL_PROVIDER")
+    if local_provider:
+        import urllib.request
+        port = "11434" if local_provider == "ollama" else "1234"
+        # LM Studio exposes v1/models, Ollama base URL returns 200
+        url = f"http://localhost:{port}/v1/models" if local_provider == "lmstudio" else f"http://localhost:{port}"
+        
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                pass # Success
+            console.print(f"[bold green]✅ Local AI Detected ({local_provider.upper()})[/bold green]")
+            console.print(f"💡 Tip: For high-precision auditing, we recommend 'llama3'.")
+        except Exception:
+            console.print(f"\n[bold red]⚠️  ERROR: {local_provider.upper()} NOT DETECTED[/bold red]")
+            console.print(f"Please ensure {local_provider.upper()} is running on port {port} before starting a local scan.")
+            sys.exit(1)
+
+    # Graceful check for API Key (skipped if local provider is used)
+    if not local_provider and not os.getenv("OPENAI_API_KEY"):
         console.print("\n" + "="*60, style="yellow")
         console.print("⚠️  WARNING: OPENAI_API_KEY NOT FOUND", style="bold yellow")
         console.print("="*60, style="yellow")
